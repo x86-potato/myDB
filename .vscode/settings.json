@@ -92,6 +92,7 @@
         "cwctype": "cpp",
         "memory_resource": "cpp",
         "string_view": "cpp",
-        "numbers": "cpp"
+        "numbers": "cpp",
+        "cassert": "cpp"
     }
 }

@@ -1,0 +1,97 @@
+key.add(int key)
+    find_spot()
+
+key.add(push_up_data)
+{
+    int insert_position
+    for i = 0 to node.key_count 
+        if(push_up_data.key fits in )
+}
+//  
+
+struct push_up_data
+{
+    int key;
+    node* left_childe
+    node* right_child
+}
+
+insert (int key)                    //non recurisve
+    node* cursor = root;
+
+    move_cursor_to_leaf(&cursor)
+
+    cursor.keys.add(key)
+    if(cursor.size < MAX_KEYS)
+        break;
+    else
+        split_leaf(&cursor)             //if leave overflow
+
+insert_up(&node, push_up_data)               //
+    node.keys.add(push_up_data)
+    if(node.size < MAX_KEYS)
+        break;
+    else
+        split(&node)
+
+
+split_leaf(&node)
+    new node right_node
+    int middle_key
+
+    int temp_keys[MAX_KEYS]
+
+    temp_keys = node.keys
+
+    node.keys.keys = keys_first_half(keys_keys)
+    new_node.keys = keys_second_half(keys_keys) // assign the keys
+
+
+
+    if(!node.parent)        //if no parent we make a new one
+        new node new_parent
+        new_parent.children[0] = node
+        new_parent.children[1] = right_node
+
+        node.parent = new_parent
+        right_node.parent = new_parent
+
+        new_parent.keys[0] = middle_key
+
+    else
+        push_up_data data(middle_key, node, right_node)
+        insert_up(node.parent, data)
+
+        
+
+
+split_internal(&node)
+    new node new_node
+    int middle_key
+
+    Node* temp_children[MAX_KEYS + 1]
+
+    int mid_key;        
+
+    temp_children = node.children
+    node.children = children_first_half(temp_children)
+    //dont inlude mid key
+    new_node.children = children_second_half(temp_children) // assign the children
+
+
+
+    int temp_keys[MAX_KEYS]                     //assign the keys
+    node.keys = keys_first_half(temp_keys)
+    new_node.keys = keys_second_half(temp_keys)
+
+    if(node.parent && node.parent)              //if there is parent 
+        insert_up(node.parent,mid_key)
+    else
+        new node = new_parent;
+        root = new_parent
+        new_parent.children[0] = new_node
+        new_parent.children[1] = node;
+        new_parent.keys.add(mid_key)
+
+
+        
