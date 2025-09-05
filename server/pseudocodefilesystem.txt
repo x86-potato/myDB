@@ -1,0 +1,15 @@
+how to handle file blocks;
+
+B tree node:        //4KB sizes
+    int16 id
+    66
+
+
+
+
+insert(data):
+    node = load_root_node
+    node.insert(data)
+
+node.insert(data):
+    

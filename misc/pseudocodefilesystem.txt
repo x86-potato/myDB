@@ -1,0 +1,52 @@
+how to handle file blocks;
+
+internal node:        
+    int16 id                    2 bytes
+    char keys[32][key_count]    32 bytes * x
+    int16 key_count_curr        2 bytes
+    bool is_leaf                1 byte
+    Node* parent;               8 bytes
+
+    Node* children[key_count+1] 8 bytes * (x+1)
+
+    padding 1 byte
+
+leaf node: 
+    int16 id                    2 bytes
+    char keys[32][key_count]    32 bytes * x
+    int16 key_count_curr        8 bytes
+    bool is_leaf                1 byte
+    Node* parent;               8 bytes
+
+    Disk* values[key_count]     8 bytes * x
+    Node* next_node;            8 bytes
+
+    padding 1 byte
+
+
+
+on init:
+    disk seek: root
+
+
+    
+    load_node(root);
+    
+    root.insert(key)
+
+
+
+create_node:
+    file_system.alloc(block_size)
+
+    
+
+
+
+
+
+FILE:
+
+block #1: metadata
+block #2: root
+block #3: data
