@@ -7,7 +7,7 @@
 #include <string>
 
 #define PAGE_SIZE 256 //256 bytes
-#define MAX_KEYS 4
+#define MAX_KEYS 100
 
 // Forward declaration - breaks circular dependency
 class File;
@@ -25,7 +25,7 @@ struct internal_node : Node {
 }; 
 
 struct leaf_node : Node { 
-    off_t values[MAX_KEYS]; 
+    off_t values[MAX_KEYS] = {0}; 
     off_t next_leaf = 0; 
 };
 
@@ -42,7 +42,7 @@ class BtreePlus {
 public: 
     BtreePlus(File &file);
     
-    void insert(std::string insert_string);
+    void insert(std::string insert_string, off_t value);
     leaf_node* find_leftmost_leaf(Node* root);
     
     Node* root_node;

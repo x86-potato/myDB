@@ -54,6 +54,8 @@ File::File()
     {
         header_pointer = 0;
         root_node_pointer = get_root_node(file);
+        fseek(file,sizeof(root_node_pointer), SEEK_SET);
+        root_data_pointer = get_root_data(file);
 
     }
 
@@ -97,13 +99,15 @@ off_t File::alloc_block()
 
 
 
-void File::insert_data(BtreePlus &tree, std::string key, int value)
+void File::insert_data(BtreePlus &tree, std::string key, std::string value)
 {
     Node *loaded_node = load_node(root_node_pointer); 
+    off_t data = write_data(value.c_str(), value.length()); 
 
     tree.root_node = loaded_node;
 
-    tree.insert(key);
+
+    tree.insert(key, data);
 
 
 
@@ -121,7 +125,6 @@ void File::read_node_block(off_t block_pointer)
     Node output;
     memcpy(&output, data, sizeof(Node));
 
-    std::cout << output.keys[0]; 
 
     fclose(file);
 }
@@ -136,6 +139,25 @@ void File::header_block_creation(FILE* file)
     
     init_root_node(file);
 
+
+    //set root data node pointer
+    root_data_pointer = this->alloc_block();
+    fseek(file,sizeof(root_node_pointer), SEEK_SET);
+    fwrite(&root_data_pointer,sizeof(root_data_pointer), 1, file);
+
+    fseek(file, root_data_pointer, SEEK_SET);
+
+    init_data_node(file, ftell(file));
+
+
+}
+void File::update_root_pointer()
+{
+    FILE* file = fopen(file_name.c_str(), "r+b");
+    fseek(file, header_pointer, SEEK_SET);
+    fwrite(&root_node_pointer, sizeof(root_node_pointer), 1, file);
+
+    fclose(file); 
 }
 
 
@@ -261,11 +283,12 @@ void File::print_leaves(off_t disk_node_offset) {
     if(node->is_leaf)
         type = "\nleaf: ";
     
-
+    std::cout << type << disk_node_offset << " keys: \n";
     for (int i = 0; i < node->current_key_count; i++)
     {
-        std::cout << type << disk_node_offset << " keys: " << node->keys[i] << "\n";
+        std::cout << node->keys[i] << " ";
     }
+    std::cout << std::endl;
     if (!node->is_leaf)    
     {
         internal_node* node_cast = static_cast<internal_node*>(node);
@@ -278,9 +301,126 @@ void File::print_leaves(off_t disk_node_offset) {
         }
         
     }
-    
+    else 
+    {
+        leaf_node* node_cast = static_cast<leaf_node*>(node);
+        for (int i = 0; i < MAX_KEYS; i++)
+        {
+            if(node_cast->values[i] != 0)
+            {
+                std::cout<< node_cast->values[i] << " ";
+            }
+        }
+    }
+}
 
-     
+
+void File::init_data_node(FILE* file, off_t location)
+{
+    //file now points to byte 0 of the data seg
+    Data_Node data;
+    data.data_offset = location + sizeof(Data_Node);
+    data.space_left = BLOCK_SIZE - sizeof(Data_Node);
+    data.overflow = false;
+    data.data_next = 0;
+
+
+    fwrite(&data, sizeof(data), 1, file);
+    fflush(file);
+
+
+
+
+}    
+
+off_t File::write_data(const char *data_to_insert, u_int16_t data_length)
+{
+    Data_Node node = load_data_node(root_data_pointer);
+    off_t write_back_location = root_data_pointer;
+    off_t to_return;
+
+    while(node.space_left < data_length)        //search for data node that has space
+    {
+        if(node.data_next == 0)
+        {
+            off_t write_back_location = alloc_block();
+
+            FILE* file = fopen(file_name.c_str(), "r+b");    
+            fseek(file,write_back_location, SEEK_SET);
+
+            init_data_node(file,write_back_location);
+
+            node.data_next = write_back_location;
+
+            node = load_data_node(write_back_location);
+        
+            break;
+        }
+        else
+        {
+            node = load_data_node(node.data_next);
+            write_back_location = node.data_next;
+
+        }
+        
+    }
+
+
+    if (node.space_left > data_length)
+    {
+        FILE* file = fopen(file_name.c_str(), "r+b");    
+        fseek(file, node.data_offset, SEEK_SET);
+        
+        fwrite(data_to_insert,data_length,1,file);
+        fflush(file);
+
+
+        to_return = node.data_offset;
+
+        node.space_left -= data_length;
+        node.data_offset = node.data_offset + data_length;
+        
+
+        fseek(file, write_back_location, SEEK_SET);
+
+        fwrite(&node, sizeof(Data_Node), 1, file);
+
+        fflush(file);
+
+    }
 
     
+    return to_return;
+}
+
+Data_Node File::load_data_node(off_t location)
+{
+    FILE* file = fopen(file_name.c_str(), "rb");    
+    fseek(file, location, SEEK_SET);
+
+    
+    Data_Node temp_node;
+
+    fread(&temp_node, sizeof(Data_Node), 1, file);
+
+
+
+
+
+    //todo: edge 
+    return temp_node;
+}
+
+off_t File::get_root_data(FILE* file)
+{
+    char buffer[8] = {0};
+    if (fread(buffer, 1, 8, file) != 8) {
+        perror("fread");
+        return -1; // error
+    }
+
+    off_t output = 0;
+    memcpy(&output, buffer, sizeof(output));
+
+    return output;
 }

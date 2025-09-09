@@ -9,7 +9,7 @@
 
 
 #define PAGE_SIZE 256 //256 bytes
-#define MAX_KEYS 4
+#define MAX_KEYS 100
 
 
 
@@ -56,7 +56,7 @@ int BtreePlus::find_left_node_child_index(Node *node)
     
 }
 
-void BtreePlus::insert(std::string insert_string)
+void BtreePlus::insert(std::string insert_string, off_t value)
 {
     //stirng to c_str
     char buffer[32];
@@ -94,8 +94,14 @@ void BtreePlus::insert(std::string insert_string)
     insert_up_data data = {};
     strncpy(data.key,to_insert,32);
     data.left_child = 0;
-    data.right_child = 0;
+    std::cout << "value to insert" << value << "\n";
+    data.right_child = value;
     insert_key_into_node(data,cursor);
+    
+    leaf_node *cursor_leaf = static_cast<leaf_node*>(cursor);
+
+    std::cout << cursor_leaf->values[0];
+
 
     file.update_node(cursor, cursor->disk_location);
 
@@ -156,6 +162,21 @@ void BtreePlus::split_leaf(Node* node)
         std::strncpy(right_node->keys[i - middle_index], temp_keys[i], 32);
     }   
 
+    // make a temp copy of the values before zeroing
+    off_t temp_values[MAX_KEYS];
+    std::memcpy(temp_values, node_cast->values, sizeof(node_cast->values));
+
+    // clear out values in the left node after middle_index
+    for (int i = middle_index; i < MAX_KEYS; i++) {
+        node_cast->values[i] = 0;
+    }
+
+    // move the right half into the right_node
+    for (int i = middle_index; i < MAX_KEYS; i++) {
+        right_node_cast->values[i - middle_index] = temp_values[i];
+    }
+
+
     node->current_key_count = middle_index;
     right_node->current_key_count = MAX_KEYS - middle_index;
 
@@ -173,6 +194,7 @@ void BtreePlus::split_leaf(Node* node)
 
         root_node = new_parent;
         file.root_node_pointer = new_parent->disk_location;
+        file.update_root_pointer();
 
         std::strncpy(new_parent->keys[0], middle_key, 32);
         new_parent->current_key_count = 1;            
@@ -269,6 +291,8 @@ void BtreePlus::split_internal(Node* node)
         new_parent->disk_location = new_parent_location;
         root_node = new_parent;
         file.root_node_pointer = new_parent_location;
+        file.update_root_pointer();
+
 
 
         internal_node* new_parent_cast = static_cast<internal_node*>(new_parent);
@@ -327,6 +351,15 @@ void BtreePlus::insert_key_into_node(insert_up_data data, Node* node)
         }
         node_cast->children[insert_positon + 1] = data.right_child;
     } 
+    else            //if is leaf, shift values too
+    {   
+        leaf_node *node_cast = static_cast<leaf_node*>(node);
+        for (int i = node->current_key_count; i > insert_positon; i--) {
+            node_cast->values[i] = node_cast->values[i - 1];
+        }
+        node_cast->values[insert_positon] = data.right_child;
+
+    }
     // Insert the new key
     std::strncpy(node->keys[insert_positon], data.key, 32);
     
