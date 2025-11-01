@@ -5,11 +5,10 @@
 #include <string>
 
 
+#include "config.h"
 #include "file.hpp"
 
-#define BLOCK_SIZE 4096
-#define MaxKeys_8  254  //254
-#define MaxKeys_32 101 //pad 24 for 101 pad 3904 for 4
+
 template<size_t KeySize, size_t MaxKeys>
 struct Node {
     off_t disk_location = 0;
@@ -31,10 +30,18 @@ struct LeafNode : Node<KeySize, MaxKeys> {
 };
 using Node32 = Node<32,MaxKeys_32>;
 using Node8 = Node<8, MaxKeys_8>;
+using Node4 = Node<4, MaxKeys_4>;
+
 using InternalNode32 = InternalNode<32,MaxKeys_32>;
 using InternalNode8 = InternalNode<8,MaxKeys_8>;
+using InternalNode4 = InternalNode<4, MaxKeys_4>;
+
 using LeafNode32 = LeafNode<32,MaxKeys_32>;
 using LeafNode8 = LeafNode<8,MaxKeys_8>;
+using InternalNode4 = InternalNode<4, MaxKeys_4>;
+
+
+
 
 class File;
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
@@ -80,9 +87,7 @@ public:
 private:
     //----------handle deletion----------------
     bool check_underflow(NodeT* node);
-        void delete_index_in_node(int index, NodeT* node, int child_index);
-
-
+    void delete_index_in_node(int index, NodeT* node, int child_index);
     void leaf_merge(InternalNodeT* parent,NodeT* current, int child_index);
     void internal_underflow(NodeT* node);
     void merge_internal(InternalNodeT* node, InternalNodeT* parent, int child_index);
@@ -93,16 +98,16 @@ private:
     void borrow_left_leaf(NodeT* current, NodeT* left);
     void borrow_right_leaf(NodeT* current, NodeT* right);
 
-
-
+    //----------handle insertion----------------
     void insert_up_into(Insert_Up_Data data,off_t node_location);
     void split_leaf(NodeT* node);
     void split_internal(NodeT* node);
     void insert_key_into_node(Insert_Up_Data data, NodeT* node);
     void push_into_internal(InternalNodeT* target, char* value);
     
+    //----------utill functions----------------
     LeafNodeT* find_leftmost_leaf(NodeT* root);
-        int find_child_index(InternalNodeT* parent, off_t child);
+    int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth);

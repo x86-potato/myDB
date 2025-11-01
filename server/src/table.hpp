@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "config.h"
 
 //TYPE defines the type of key that is per column,
 //STRING is NOT indexable, must be 
@@ -21,11 +22,7 @@ namespace TypeUtil {
     int type_len(Type &check);
 }
 
-struct arg {
-    std::string column;
-    std::string rhs;
-    arg(std::string column, std::string rhs);
-};
+
 
 struct Column {
     std::string name;
@@ -35,7 +32,7 @@ struct Column {
 };
 
 struct Table {
-    std::string table_name;
+    std::string name;
     std::vector<Column> columns;
 
     Table();

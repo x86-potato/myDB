@@ -1,3 +1,4 @@
+#include "config.h"
 #include "table.hpp"
 
 namespace TypeUtil {
@@ -34,11 +35,6 @@ int type_len(Type &check)
 
 } // namespace TypeUtil
 
-// ----------------------- arg -----------------------
-arg::arg(std::string column, std::string rhs)
-    : column(column), rhs(rhs)
-{
-}
 
 // ----------------------- Column -----------------------
 Column::Column() {}
@@ -49,7 +45,7 @@ Column::Column(std::string name, Type type)
 }
 
 // ----------------------- Table -----------------------
-Table::Table() : table_name("none")
+Table::Table() : name("none")
 {
 }
 
@@ -66,7 +62,7 @@ Table::Table(std::byte* data, int len)
 
         if (input_char == ' ') {
             if (!table_name_picked) {
-                table_name = buffer;
+                name = buffer;
                 table_name_picked = true;
             } else if (!name_picked) {
                 new_column.name = buffer;
@@ -95,7 +91,7 @@ Table::Table(std::byte* data, int len)
 
 void Table::table_print()
 {
-    std::cout << "\ntable name: " << table_name << std::endl;
+    std::cout << "\ntable name: " << name << std::endl;
     for (auto &i : columns) {
         std::cout << "column: " << i.name << " " << TypeUtil::type_to_string(i.type) << std::endl;
     }
@@ -113,6 +109,10 @@ int Table::primaryLen()
         {
             return 32;
         }
+        case (Type::UNKNOWN):
+        {
+            return 0;
+        }
     }
     return 0;
 }
@@ -125,7 +125,7 @@ std::vector<std::byte> cast_to_bytes(Table *table)
     std::vector<std::byte> output;
 
     // push table name
-    for (auto &c : table->table_name)
+    for (auto &c : table->name)
         output.push_back(static_cast<std::byte>(c));
     output.push_back(static_cast<std::byte>(' '));
 

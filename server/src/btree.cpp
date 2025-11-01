@@ -193,7 +193,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(InternalNodeT* paren
     else                    //right merges with us
     {
         NodeT *right = file.load_node<NodeT,InternalNodeT,LeafNodeT>(parent->children[child_index+1]);
-        LeafNodeT *right_cast = static_cast<LeafNodeT*>(right);
+        //LeafNodeT *right_cast = static_cast<LeafNodeT*>(right);
         int current_key_iterator = 0;
         //move elements here
         while(right->current_key_count > 0)
@@ -779,9 +779,8 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_index_in_node(int index,
         InternalNodeT* node_cast = static_cast<InternalNodeT*>(node);
         //adjust children
         int old_count = node_cast->current_key_count;
-        int i = child_index+1;
         //if(is_merge) i++;
-        for (i; i < old_count + 1; i++)
+        for (int i = child_index+1; i < old_count + 1; i++)
         {
             node_cast->children[i] = node_cast->children[i+1];
            

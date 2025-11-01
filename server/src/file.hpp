@@ -12,6 +12,7 @@
 #include <fcntl.h>
 
 
+#include "config.h"
 #include "cache.hpp"
 #include "table.hpp"
 #include "record.hpp"
@@ -19,7 +20,7 @@
 
 
 
-#define BLOCK_SIZE 4096
+
 #define HEADER_TABLE_LOCATION 0
 #define HEADER_ROOT_NODE_LOCATION 8
 #define HEADER_ROOT_DATA_LOCATION 16

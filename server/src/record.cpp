@@ -1,26 +1,33 @@
+#include "config.h"
 #include "record.hpp"
 #include "query.hpp"
 #include "file.hpp"
+#include "validator.hpp"
 
 
 std::string strip_quotes(const std::string &input)
 {
-     
+    std::string output = std::string(input.begin()+1, input.end()-1);
+
+
+
+    return output;
 }
 
-Record::Record(Query &query, Table &table)
+Record::Record(const StringVec &tokens,const Table &table)
 {
-    if(str.length() != 0) str.clear();
-    for(int i = 0; i < query.args.size(); i++)
+    for(long unsigned int i = 3; i < tokens.size(); i++)
     {
-        int entry_len = 0;
-        switch (table.columns[i].type)
+        switch (table.columns[i-3].type)
         {
             case Type::INTEGER:
             {
-                entry_len = 4;
-
-                int32_t number = std::stoi(query.args[i].rhs);
+                if(!validate_INTEGER_token(tokens[i])){
+                    length = -1;    //mark to throw error
+                    break;
+                }
+                
+                int32_t number = std::stoi(tokens[i]);
 
                 int8_t casted_int[4];
 
@@ -38,18 +45,29 @@ Record::Record(Query &query, Table &table)
             }
             case Type::STRING:
             {
-                
-                entry_len = query.args[i].rhs.length();
-                str += query.args[i].rhs;
+                std::cout << tokens[i] << " ";
+
+                str += strip_quotes(tokens[i]);
+                break;
+            }
+            case Type::UNKNOWN:
+            {
+
                 break;
             }
         }
-
+        if(length == -1)
+        {
+            break;
+        }
         str += " ";
     } 
-     
-    str[str.length()-1] = ';';
-    length = str.length();
+
+    if(length != -1)
+    {
+        str[str.length()-1] = ';';
+        length = str.length();
+    } 
 
 }
 

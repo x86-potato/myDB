@@ -1,0 +1,15 @@
+#pragma once
+#include <vector>
+#include <string>
+
+constexpr int CACHE_PAGE_LIMIT = 200000;      //1024 * 1024
+constexpr unsigned long MEM_LIMIT = CACHE_PAGE_LIMIT * 4096;
+constexpr double MEM_LIMIT_GIGS = MEM_LIMIT/(1024.0*1024.0*1024.0);
+constexpr int BLOCK_SIZE = 4096;
+
+constexpr int MaxKeys_4 = 339;
+constexpr int MaxKeys_8  = 254;  //254
+constexpr int MaxKeys_32 = 101; //pad 24 for 101 pad 3904 for 4
+
+
+using StringVec = std::vector<std::string>;

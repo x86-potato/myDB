@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.h"
 #include <iostream>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -9,8 +10,6 @@
 #include <cassert>
 #include <cstring>
 
-#define CACHE_PAGE_LIMIT 100000      //100K for 400MB cache
-#define BLOCK_SIZE 4096
 
 // Structure representing a memory page
 struct Page

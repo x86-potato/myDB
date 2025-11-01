@@ -1,3 +1,4 @@
+#include "config.h"
 #include "file.hpp"
 #include "btree.hpp"
 
@@ -268,7 +269,7 @@ void File::init_data_node(off_t location)
 
     Page* page = cache.read_block(location);
 
-    memcpy(page, &data,sizeof(data));
+    memcpy(page->buffer, &data,sizeof(data));
 
     cache.write_block(location);
 }    
