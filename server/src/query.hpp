@@ -14,9 +14,6 @@
 
 
 
-using BtreePlus32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
-using BtreePlus8  = BtreePlus<Node8,  LeafNode8,  InternalNode8>;
-
 struct arg {
     std::string column;
     std::string rhs;
@@ -68,8 +65,9 @@ namespace Query {
     void execute(
         const std::string& input,
         File& file,
-        BtreePlus32* IndexTree32,
-        BtreePlus8* IndexTree8
+        MyBtree32* IndexTree32,
+        MyBtree8* IndexTree8,
+        MyBtree4* IndexTree4
     );
 
 } // namespace Query

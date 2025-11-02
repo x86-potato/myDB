@@ -13,8 +13,6 @@
 
 
 
-using BtreePlus32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
-using BtreePlus8  = BtreePlus<Node8, LeafNode8,InternalNode8>;
 
 
 
@@ -24,17 +22,20 @@ int main()
 {
     File file;
 
-    BtreePlus8 index_tree8(file);
-    BtreePlus32 index_tree32(file);
+    MyBtree32 index_tree32(file);
+    MyBtree8 index_tree8(file);
+    MyBtree4 index_tree4(file);
 
     std::string line; 
     StringVec lines;
 
     //std::ifstream file("tests/users.sql");
-
+    std::cout << "db> ";
     while (std::getline(std::cin, line)) {
         if(line == "exit") break;
-        lines.push_back(line);
+        Query::execute(line,file, &index_tree32, &index_tree8, &index_tree4);
+        //lines.push_back(line);
+        std::cout << "db> ";
     }
 
     // Start timing here
@@ -42,7 +43,6 @@ int main()
 
     for (const auto& input : lines) 
     {
-        Query::execute(input,file, &index_tree32, &index_tree8);
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;

@@ -15,7 +15,6 @@ bool validate_type(Type type)
 
 bool validate_insert_length(const StringVec& tokens, const Table& table)
 {
-    std::cout << tokens.size() << " " << table.columns.size();
     if (tokens.size() - 3 != table.columns.size()) return false;
     return true;
 }

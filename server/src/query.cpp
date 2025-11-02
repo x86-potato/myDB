@@ -74,15 +74,31 @@ namespace Query
         return output;
 
     }
+
+    void insertINTEGER(MyBtree4 *indexTree, Record &record, std::string primaryKey, File &file)
+    {
+        file.insert_data<MyBtree4,Node4,LeafNode4,InternalNode4>
+        (primaryKey,record,*indexTree);
+    }
+    void insertSTRING(MyBtree32 *indexTree, Record &record, std::string primaryKey, File &file)
+    {
+        file.insert_data<MyBtree32,Node32,LeafNode32,InternalNode32>
+        (primaryKey,record,*indexTree);    
+    }
     /*
         create users (uid=int, username=string, password=int);
         insert into users (1, "smartpotato", 1234);
         find users where (username="smartpotato");
     */
-    void execute(const std::string &input,File &file, BtreePlus32 *IndexTree32, BtreePlus8 *IndexTree8)
+    void execute(const std::string &input,File &file, 
+    MyBtree32 *IndexTree32, 
+    MyBtree8 *IndexTree8, 
+    MyBtree4*IndexTree4)
     {
         StringVec tokens;
         tokenize(input, tokens);
+
+        if(tokens.size() < 3) return;
 
         Command command = CommandUtil::string_to_command(tokens[0]);
         std::string table_name;
@@ -123,9 +139,13 @@ namespace Query
             }
             case Command::FIND: {
                 table_name = tokens[1];
-                validate_table(table_name, file.primary_table);
+                if(!validate_table(table_name, file.primary_table))        { catch_error(QueryError::InvalidTable); return; }
 
-                break;
+                std::string &search_column = tokens[3];
+                std::string &search_word   = tokens[4];
+                
+
+
             }
             case Command::INSERT: {
                 table_name = tokens[2];
@@ -133,50 +153,25 @@ namespace Query
                 if(!validate_insert_length(tokens, file.primary_table))    { catch_error(QueryError::NotEnoughArgs); return; }
 
 
-                int key_len = TypeUtil::type_len(file.primary_table.columns[0].type);
+                int primary_key_len = TypeUtil::type_len(file.primary_table.columns[0].type);
+                Type primaryKeyType = file.primary_table.columns[0].type;
                 const std::string &primary_key = tokens[3]; 
-                //if(key_len == 8 && tokens[3].length() <= 8) 
-                //{
-                //     Record record(*this,file.primary_table);
 
+                Record record(tokens,file.primary_table);
 
-                //     file.insert_data<MyBtree8,Node8,LeafNode8,InternalNode8>(tokens[i],record,*IndexTree8);
-                // }
-                if(key_len == 32 && primary_key.length() <= 32)
-                {
-                    Record record(tokens,file.primary_table);
-                    if (record.length == -1)
-                    {
-                        catch_error(QueryError::ArgColumnMismatch); 
-                        return;
-                    }
-                    else
-                    {
-                        std::cout << record.str;
-                        file.insert_data<MyBtree32,Node32,LeafNode32,InternalNode32>(primary_key,record,*IndexTree32);    
-                    }
+                if (record.length == -1) { catch_error(QueryError::ArgColumnMismatch); return;}
+
+                switch (primaryKeyType){
+                    case Type::INTEGER:
+                        insertINTEGER(IndexTree4, record, primary_key, file);
+                    case Type::STRING:
+                        insertSTRING(IndexTree32, record, primary_key, file);
                 }
-
-                
-
-                break;
             }
             case Command::None: {
                 result.error = QueryError::NoCommand;
                 break;
             }
         }
-
-
-
-        //arg_vec_split(lexer_out.arg_strings);
-
-
-       // std::cout << "Query: " << errorToString(execute(file).error);
-
     }
-
-
-
-
 }

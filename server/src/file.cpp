@@ -376,7 +376,9 @@ off_t File::write_record(Record &record)
         record_location = free_data_pointer + (24 + node->fill_ptr);
 
         memcpy(node->padding + node->fill_ptr, record.str.data(), record.length);
-        node->fill_ptr += record.length;
+        //cache.write_to_page(page, 24 + node->fill_ptr,record.str.data(), record.length, free_data_pointer);
+        node->fill_ptr = node->fill_ptr + record.length;
+        cache.write_to_page(page, 0,node, BLOCK_SIZE, free_data_pointer);
 
 
     }
@@ -395,9 +397,12 @@ off_t File::write_record(Record &record)
         memcpy(node->padding + node->fill_ptr, record.str.data(), record.length);
 
         node->fill_ptr += record.length;
+
+
+        cache.write_to_page(page, 0,node, BLOCK_SIZE, free_data_pointer);
+
     }
     
-    cache.write_block(free_data_pointer);
     
     return record_location;
     
@@ -423,22 +428,27 @@ Data_Node *File::load_data_node(off_t location)
     //todo: edge 
     return temp_node;
 }
-    
 
+template Node4* File::load_node<Node4, InternalNode4, LeafNode4>(off_t);
+template void File::update_node<Node4>(Node4*, off_t);
+template void File::update_node<InternalNode4>(InternalNode4*, off_t);
 
-// Explicit instantiations for Node<32,101> variants
-template Node32* File::load_node<Node32, InternalNode32, LeafNode32>(off_t);
-template void File::update_node<Node32>(Node32*, off_t);
-template void File::update_node<InternalNode32>(InternalNode32*, off_t);
-
-// Explicit instantiations for Node<8,254> variants
 template Node8* File::load_node<Node8, InternalNode8, LeafNode8>(off_t);
 template void File::update_node<Node8>(Node8*, off_t);
 template void File::update_node<InternalNode8>(InternalNode8*, off_t);
 
-// Explicit instantiations for insert_data
+template Node32* File::load_node<Node32, InternalNode32, LeafNode32>(off_t);
+template void File::update_node<Node32>(Node32*, off_t);
+template void File::update_node<InternalNode32>(InternalNode32*, off_t);
+
+
 template void File::insert_data<MyBtree32, Node32, LeafNode32, InternalNode32>(std::string, Record&, MyBtree32);
 template void File::insert_data<MyBtree8, Node8, LeafNode8, InternalNode8>(std::string, Record&, MyBtree8);
+template void File::insert_data<MyBtree4, Node4, LeafNode4, InternalNode4>(std::string, Record&, MyBtree4);
 
 template void File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32);
 template void File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8);
+template void File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4);
+
+
+

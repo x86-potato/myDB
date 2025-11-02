@@ -1,6 +1,4 @@
-#ifndef FILE_HPP
-#define FILE_HPP
-
+#pragma once
 
 #include <iomanip>
 #include <stdio.h>
@@ -107,4 +105,3 @@ private:
     Data_Node *load_data_node(off_t location);
 };
 
-#endif // FILE_HPP

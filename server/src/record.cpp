@@ -45,7 +45,6 @@ Record::Record(const StringVec &tokens,const Table &table)
             }
             case Type::STRING:
             {
-                std::cout << tokens[i] << " ";
 
                 str += strip_quotes(tokens[i]);
                 break;

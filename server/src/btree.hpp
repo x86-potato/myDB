@@ -38,7 +38,7 @@ using InternalNode4 = InternalNode<4, MaxKeys_4>;
 
 using LeafNode32 = LeafNode<32,MaxKeys_32>;
 using LeafNode8 = LeafNode<8,MaxKeys_8>;
-using InternalNode4 = InternalNode<4, MaxKeys_4>;
+using LeafNode4 = LeafNode<4, MaxKeys_4>;
 
 
 
@@ -54,12 +54,14 @@ public:
     File &file;
     static constexpr int MaxKeys= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return MaxKeys_8;
+        else if constexpr (std::is_same_v<NodeT, Node4>) return MaxKeys_4;
         else if constexpr (std::is_same_v<NodeT, Node32>) return MaxKeys_32;
         else return -1; // fallback
     }();
     
     static constexpr int KeyLen= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return 8;
+        else if constexpr (std::is_same_v<NodeT, Node4>) return 4;
         else if constexpr (std::is_same_v<NodeT, Node32>) return 32;
         else return -1; // fallback
     }();
@@ -115,3 +117,4 @@ private:
 };
 using MyBtree32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
 using MyBtree8  = BtreePlus<Node8, LeafNode8,InternalNode8>;
+using MyBtree4  = BtreePlus<Node4, LeafNode4,InternalNode4>;

@@ -801,3 +801,4 @@ LeafNodeT* BtreePlus<NodeT, LeafNodeT, InternalNodeT>::find_leftmost_leaf(NodeT*
 // Explicit instantiations
 template class BtreePlus<Node32, LeafNode32, InternalNode32>;
 template class BtreePlus<Node8, LeafNode8, InternalNode8>;
+template class BtreePlus<Node4, LeafNode4, InternalNode4>;
