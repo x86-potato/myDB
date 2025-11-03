@@ -43,7 +43,8 @@ enum class QueryError {
     InvalidTable,
     NoArgs,
     InvalidType,
-    ColumnAlreadyExists
+    ColumnAlreadyExists,
+    SearchColumnNotFound
 };
 
 std::string errorToString(QueryError e);

@@ -41,9 +41,6 @@ int main()
     // Start timing here
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    for (const auto& input : lines) 
-    {
-    }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
     std::cout << "Execution time: " << elapsed.count() << " seconds\n";

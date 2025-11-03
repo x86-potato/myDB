@@ -63,7 +63,7 @@ public:
     void insert_data(std::string key, Record &record, MyBtree index_tree);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-    void find(std::string key, MyBtree index_tree);
+    Record find(std::string key, MyBtree index_tree);
 
     void update_root_pointer();
 

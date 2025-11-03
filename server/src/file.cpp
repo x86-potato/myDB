@@ -74,11 +74,13 @@ void File::insert_data(std::string key,Record &record, MyBtree index_tree)
 }
 
 template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-void File::find(std::string key, MyBtree index_tree)
+Record File::find(std::string key, MyBtree index_tree)
 {
     off_t location = index_tree.search(key);
 
     Record temp = get_record(location);
+
+    return temp;
 }
 
 void File::update_root_pointer()    
@@ -446,9 +448,9 @@ template void File::insert_data<MyBtree32, Node32, LeafNode32, InternalNode32>(s
 template void File::insert_data<MyBtree8, Node8, LeafNode8, InternalNode8>(std::string, Record&, MyBtree8);
 template void File::insert_data<MyBtree4, Node4, LeafNode4, InternalNode4>(std::string, Record&, MyBtree4);
 
-template void File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32);
-template void File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8);
-template void File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4);
+template Record File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32);
+template Record File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8);
+template Record File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4);
 
 
 

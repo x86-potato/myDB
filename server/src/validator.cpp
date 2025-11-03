@@ -44,3 +44,13 @@ bool validate_INTEGER_token(const std::string& s)
         return true; // exactly equal to 2147483647
     }
 }
+
+bool validatePrimaryFind(const Table &table, const std::string &column)
+{
+    if (table.columns[0].name == column)
+    {
+        return true;
+    }
+
+    return false;
+}

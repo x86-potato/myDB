@@ -16,6 +16,18 @@ namespace CommandUtil {
         if (input == "FIND")    return Command::FIND;
         return Command::None;
     }
+    std::string commandToString(Command command)
+    {
+        switch (command)
+        {
+            case Command::CREATE: return "CREATE";
+            case Command::INSERT: return "INSERT";
+            case Command::INDEX: return "INDEX";
+            case Command::FIND: return "FIND";
+            case Command::None: return "COMMAND ERROR";
+        }
+        return "NONE";
+    }
 }
 
 std::string errorToString(QueryError e)
@@ -30,6 +42,7 @@ std::string errorToString(QueryError e)
         case QueryError::NoArgs:                return "No columns specified";
         case QueryError::InvalidType:           return "Invalid column type";
         case QueryError::ColumnAlreadyExists:   return "Column already created";
+        case QueryError::SearchColumnNotFound:  return "Given search column does not exist";
     }
     return "Unknown error";
 }
@@ -44,14 +57,16 @@ namespace Query
 {
     void query_return(Command command, QueryResult result)
     {
+        
         if(result.error != QueryError::None)
         {
             //if error
-            std::cout << "ERROR: " << errorToString(result.error) << "\n";
+            std::cout << CommandUtil::commandToString(command) << " ERROR: " << errorToString(result.error) << "\n";
             return;
         }
 
-        std::cout << "SUCCSESS"  << "\n";
+        
+        std::cout << CommandUtil::commandToString(command) << " SUCCESS" << "\n";
 
     }
     Args arg_vec_split(const StringVec &tokens)
@@ -77,8 +92,14 @@ namespace Query
 
     void insertINTEGER(MyBtree4 *indexTree, Record &record, std::string primaryKey, File &file)
     {
+        if(!validate_INTEGER_token(primaryKey)){return;}
+
+        int32_t string_to_int = stoi(primaryKey);
+        std::string converted(4, '\0');
+        memcpy(&converted[0], &string_to_int, 4);
+
         file.insert_data<MyBtree4,Node4,LeafNode4,InternalNode4>
-        (primaryKey,record,*indexTree);
+        (converted,record,*indexTree);
     }
     void insertSTRING(MyBtree32 *indexTree, Record &record, std::string primaryKey, File &file)
     {
@@ -138,14 +159,41 @@ namespace Query
                 query_return(command,result); return;
             }
             case Command::FIND: {
+                if(tokens.size() != 4) { catch_error(QueryError::NotEnoughArgs); return;}
                 table_name = tokens[1];
                 if(!validate_table(table_name, file.primary_table))        { catch_error(QueryError::InvalidTable); return; }
 
-                std::string &search_column = tokens[3];
-                std::string &search_word   = tokens[4];
+                Args arg = arg_vec_split(tokens);
+                std::string &search_column = arg[0].column;
+                std::string &search_word   = arg[0].rhs;
                 
+                if(!validatePrimaryFind(file.primary_table, search_column)) { catch_error(QueryError::SearchColumnNotFound);return;}
+  
+                switch (file.primary_table.columns[0].type)
+                {
+                    case Type::INTEGER:
+                    {
+                        if(!validate_INTEGER_token(search_word)) return;
+                        int string_to_int = stoi(search_word);
+                        std::string converted(4, '\0');
+                        memcpy(&converted[0], &string_to_int, 4);
+                        Record record = file.find<MyBtree4, Node4, InternalNode4, LeafNode4>(converted, *IndexTree4);
+                        break;
+                    }
+                    case Type::STRING:
+                    {
+                        Record record = file.find<MyBtree32, Node32, InternalNode32, LeafNode32>(search_word, *IndexTree32);
+                        break;
+                    }
+                    case Type::UNKNOWN:
+                    {
+                        break;
+                    }
 
+                }
 
+                result.error = QueryError::None;
+                query_return(command,result); return;
             }
             case Command::INSERT: {
                 table_name = tokens[2];
@@ -163,14 +211,26 @@ namespace Query
 
                 switch (primaryKeyType){
                     case Type::INTEGER:
+                        
                         insertINTEGER(IndexTree4, record, primary_key, file);
+                        break;
                     case Type::STRING:
                         insertSTRING(IndexTree32, record, primary_key, file);
+                        break;
+
+                    case Type::UNKNOWN:
+                        break;
                 }
+                result.error = QueryError::None;
+                query_return(command,result); return;
+            }
+            case Command::INDEX: {
+                return;
             }
             case Command::None: {
                 result.error = QueryError::NoCommand;
-                break;
+
+                catch_error(QueryError::NoCommand);
             }
         }
     }

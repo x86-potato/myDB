@@ -41,4 +41,8 @@ bool validate_insert_length(const StringVec& tokens, const Table& table);
  */
 bool validate_INTEGER_token(const std::string& s);
 
+
+
+bool validatePrimaryFind(const Table &table, const std::string &column);
+
 #endif // VALIDATION_HPP
