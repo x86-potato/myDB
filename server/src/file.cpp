@@ -389,6 +389,7 @@ off_t File::write_record(Record &record)
         //handle overflow and new nodes
 
         free_data_pointer = alloc_block();
+        Page *new_page = cache.read_block(free_data_pointer);
 
         Data_Node *node = load_data_node(free_data_pointer);
         init_data_node(free_data_pointer);
@@ -401,7 +402,7 @@ off_t File::write_record(Record &record)
         node->fill_ptr += record.length;
 
 
-        cache.write_to_page(page, 0,node, BLOCK_SIZE, free_data_pointer);
+        cache.write_to_page(new_page, 0,node, BLOCK_SIZE, free_data_pointer);
 
     }
     

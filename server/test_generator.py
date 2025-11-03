@@ -1,76 +1,65 @@
 import random
 import string
+from datetime import datetime, timedelta
 
-# Configuration
-output_file = "users.sql"
-num_inserts = 10000000  # number of random insert lines
+# Number of users to generate
+N = 100  # change as needed
+filename = "users.sql"
 
-# Sample word list for Xbox-style usernames
-words = [
-    "Shadow", "Dragon", "Pixel", "Ghost", "Thunder", "Blade", "Frost", 
-    "Fire", "Storm", "Wolf", "Knight", "Hunter", "Rogue", "Titan", "Nova",
-    "Smart", "Ranger","Vortex", "Venom", "Eclipse", "Phantom", "Blaze", 
-    "Reaper", "Raptor",
-    "Specter", "Inferno", "Ember", "Striker", "Falcon", "Havoc", "Rift",
-    "Razor", "Bolt", "Echo", "Surge", "Matrix", "Cipher", "Wraith", "Obsidian",
-    "Tempest", "Onyx", "Comet", "Quantum", "Crimson", "Viper", "Talon",
-    "Zero", "Archer", "Blitz", "Sentinel", "Glitch", "Orbit", "Ace",
-    "Forge", "Pulse", "Vertex", "Neon", "Raven", "Spectra", "NovaX", 
-    "Terror", "Grim", "Flux", "Delta", "Omega", "Phoenix", "Hollow",
-    "Ion", "Nitro", "Stealth", "Core", "Zephyr", "Rune", "Solar",
-    "Arctic", "Chaos", "Dread", "EchoX", "Jet", "Venus", "Mars",
-    "Lancer", "Plasma", "Drift", "Fury", "Tundra", "QuantumX"
-]
-words += [
-    "NovaCore", "ShadowX", "Nightfall", "Ironclad", "PulseX", "Cryo", "Spectral",
-    "Graviton", "Oblivion", "Phaser", "Neutrino", "Valkyrie", "Apex", "Blizzard",
-    "Circuit", "GhostX", "Titanium", "Darkstar", "Revenant", "Overdrive", "Mirage",
-    "VenomX", "Crytek", "Skyfire", "Hex", "Infernal", "Lumina", "Stratos", "Nebula",
-    "Onslaught", "Sentrix", "Warp", "Volt", "Havok", "OmegaX", "Shadowborn", "Cryon",
-    "Ironfang", "Pulsefire", "Nightshade", "QuantumZ", "Void", "RogueX", "Blight",
-    "Stormbreaker", "EclipseX", "Frostbite", "Grimlock", "Exodus", "PhantomX", "Drakon",
-    "VortexX", "Solaris", "ThunderX", "SpectreX", "ChaosX", "FuryX", "NovaStorm"
+# Xbox-style username components
+adjectives = [
+    "Cool", "Dark", "Epic", "Silent", "Pro", "Crazy", "Fast", "Red", "Blue",
+    "Shadow", "Night", "Mega", "Ultra", "Stealth", "Fire", "Ice", "Ghost", "Wild"
 ]
 
-
-
+nouns = [
+    "Gamer", "Ninja", "Wizard", "Sniper", "Dragon", "Hunter", "Rider",
+    "Warrior", "Slayer", "Ghost", "Assassin", "Knight", "Destroyer", "Shadow", "Blade"
+]
 
 # Helper functions
 def xbox_username():
-    return random.choice(words) + random.choice(words) + str(random.randint(10, 9999))
+    """Generate an Xbox-style username with digits and optional underscores."""
+    name = random.choice(adjectives) + random.choice(nouns)
+    digits = str(random.randint(0, 9999))
+    name += digits
+    if random.choice([True, False]):
+        name = "_" + name + "_"
+    return name
 
-def random_password(length=10):
-    chars = string.ascii_letters + string.digits + "!@#$%^&*"
+def simple_password(length=12):
+    """Password with only letters and digits (no special symbols)."""
+    chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k=length))
 
-def random_email():
-    name = ''.join(random.choices(string.ascii_lowercase, k=random.randint(5,10)))
-    domain = random.choice(["gmail.com","yahoo.com","hotmail.com"])
-    return f"{name}@{domain}"
+def email_for_username(username):
+    """Generate email with only letters, digits, underscores, @ and dots."""
+    clean_username = username.replace("_", "")
+    domains = ["gmail.com", "yahoo.com", "outlook.com", "example.com"]
+    return f"{clean_username}@{random.choice(domains)}"
 
-def random_dob():
-    day = random.randint(1,28)
-    month = random.randint(1,12)
-    year = random.randint(1970,2010)
-    return f"{month}/{day}/{year}"
+def random_dob(start_year=1950, end_year=2010):
+    """Random date of birth in d/m/yyyy format."""
+    start = datetime(year=start_year, month=1, day=1)
+    end = datetime(year=end_year, month=12, day=31)
+    delta = end - start
+    random_days = random.randint(0, delta.days)
+    dob = start + timedelta(days=random_days)
+    return f"{dob.day}/{dob.month}/{dob.year}"
 
-# Generate file
-with open(output_file, "w") as f:
-    # First line: table creation
-    f.write("create users (username=string, password=string, email=string, dob=string);\n")
+# Generate SQL inserts
+with open(filename, "w") as f:
+    # Table creation line
+    f.write('create users (username=string, password=string, email=string, dob=string);')
     
-    # First fixed insert
-    f.write('insert users (username="smartpotato", password="password", email="sp666@gmail.com", dob="2/8/1991");\n')
-    
-    # Random inserts
-    for _ in range(num_inserts):
-        uname = xbox_username()
-        pwd = random_password()
-        email = random_email()
+    for _ in range(N):
+        username = xbox_username()
+        password = simple_password()
+        email = email_for_username(username)
         dob = random_dob()
-        f.write(f'insert users (username="{uname}", password="{pwd}", email="{email}", dob="{dob}");\n')
+        f.write(f'\ninsert into users ("{username}", "{password}", "{email}", "{dob}");')
     
-    # End with exit
-    f.write("exit\n")
+    # Exit at the end
+    f.write('\nexit\n')
 
-print(f"File '{output_file}' created with {num_inserts + 1} insert statements.")
+print(f"{N} users written to {filename}")
