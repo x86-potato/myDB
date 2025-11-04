@@ -45,4 +45,9 @@ bool validate_INTEGER_token(const std::string& s);
 
 bool validatePrimaryFind(const Table &table, const std::string &column);
 
+
+
+
+bool validateColumnList(const Table &table, const StringVec &tokens);
+
 #endif // VALIDATION_HPP

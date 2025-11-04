@@ -43,6 +43,7 @@ std::string errorToString(QueryError e)
         case QueryError::InvalidType:           return "Invalid column type";
         case QueryError::ColumnAlreadyExists:   return "Column already created";
         case QueryError::SearchColumnNotFound:  return "Given search column does not exist";
+        case QueryError::InsertFromFailed:      return "Given columns do not much the table give";
     }
     return "Unknown error";
 }
@@ -66,7 +67,7 @@ namespace Query
         }
 
         
-        std::cout << CommandUtil::commandToString(command) << " SUCCESS" << "\n";
+        //std::cout << CommandUtil::commandToString(command) << " SUCCESS" << "\n";
 
     }
     Args arg_vec_split(const StringVec &tokens)
@@ -105,6 +106,13 @@ namespace Query
     {
         file.insert_data<MyBtree32,Node32,LeafNode32,InternalNode32>
         (primaryKey,record,*indexTree);    
+
+
+    }
+    void handleInsertFrom(const StringVec& tokens)
+    {
+
+        
     }
     /*
         create users (uid=int, username=string, password=int);
@@ -198,14 +206,58 @@ namespace Query
             case Command::INSERT: {
                 table_name = tokens[2];
                 if(!validate_table(table_name, file.primary_table))        { catch_error(QueryError::InvalidTable); return; }
-                if(!validate_insert_length(tokens, file.primary_table))    { catch_error(QueryError::NotEnoughArgs); return; }
+                if(tokens[3] != "from" && !validate_insert_length(tokens, file.primary_table))    { catch_error(QueryError::NotEnoughArgs); return; }
+
+                if (tokens[3] == "from"){   //handle csv insertion
+                    if (tokens.size() != 5) return;
+
+                    std::string fileName = tokens[4];
+                    std::ifstream dataFile(strip_quotes(fileName));
+
+                    std::string line;
+                    std::getline(dataFile, line);
+
+                    StringVec headerTokens;
+                    tokenize(line, headerTokens);
+
+                    Type primaryKeyType = file.primary_table.columns[0].type;
+
+                    if(!validateColumnList(file.primary_table, headerTokens)) { catch_error(QueryError::InsertFromFailed); return;}
+
+                    while (std::getline(dataFile, line))
+                    {
+                        StringVec insertLine;
+                        tokenize(line, insertLine);
+
+                        Record record(insertLine, file.primary_table, 0);
+
+                        if (record.length == -1) { catch_error(QueryError::ArgColumnMismatch); return;}
+                        
+                        switch (primaryKeyType){
+                            case Type::INTEGER:
+                                
+                                insertINTEGER(IndexTree4, record, insertLine[0], file);
+                                break;
+                            case Type::STRING:
+                                insertSTRING(IndexTree32, record, insertLine[0], file);
+                                break;
+
+                            case Type::UNKNOWN:
+                                break;
+                        }
+
+                    }
 
 
+                    return;
+                }
+                
+                //handle standrd insertion
                 int primary_key_len = TypeUtil::type_len(file.primary_table.columns[0].type);
                 Type primaryKeyType = file.primary_table.columns[0].type;
                 const std::string &primary_key = tokens[3]; 
 
-                Record record(tokens,file.primary_table);
+                Record record(tokens,file.primary_table, 3);
 
                 if (record.length == -1) { catch_error(QueryError::ArgColumnMismatch); return;}
 

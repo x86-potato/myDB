@@ -7,6 +7,9 @@
 
 std::string strip_quotes(const std::string &input)
 {
+
+    if(input[0] != 34 || input[input.size()-1] != 34) return input;
+
     std::string output = std::string(input.begin()+1, input.end()-1);
 
 
@@ -14,11 +17,11 @@ std::string strip_quotes(const std::string &input)
     return output;
 }
 
-Record::Record(const StringVec &tokens,const Table &table)
+Record::Record(const StringVec &tokens,const Table &table, int offset)
 {
-    for(long unsigned int i = 3; i < tokens.size(); i++)
+    for(long unsigned int i = offset; i < tokens.size(); i++)
     {
-        switch (table.columns[i-3].type)
+        switch (table.columns[i-offset].type)
         {
             case Type::INTEGER:
             {

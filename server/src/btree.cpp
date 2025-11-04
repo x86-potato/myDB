@@ -15,7 +15,7 @@ BtreePlus<NodeT, LeafNodeT, InternalNodeT>::BtreePlus(File &file) : file(file)
        
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
-void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_string, off_t value)
+InsertResult BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_string, Record &record)
 {
     //stirng to c_str
     char buffer[KeyLen];
@@ -33,13 +33,16 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_strin
         cursor = file.load_node<NodeT,InternalNodeT,LeafNodeT>(get_next_node_pointer(to_insert,cursor_cast));
     }
 
+    if (leaf_contains(cursor, insert_string)) { return Failed; }
+
+    off_t record_location = file.write_record(record);
 
     //insert into current node
     Insert_Up_Data data = {};
     strncpy(data.key,to_insert,KeyLen);
     data.left_child = 0;
 
-    data.right_child = value;
+    data.right_child = record_location;
     insert_key_into_node(data,cursor);
    
     file.update_node(cursor, cursor->disk_location);
@@ -47,6 +50,8 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_strin
     {
         split_leaf(cursor);
     }
+
+    return Success;
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_string)
@@ -549,6 +554,33 @@ off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::get_next_node_pointer(char* to
     return node->children[left];
 }
 
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, const std::string &key)
+{
+    int left = 0;
+    int right = leaf->current_key_count - 1;
+
+    while (left <= right)
+    {
+        int mid = left + (right - left) / 2;
+        int cmp = strcmp(key.c_str(), leaf->keys[mid]);
+
+        if (cmp == 0)
+        {
+            return true; // key found
+        }
+        else if (cmp < 0)
+        {
+            right = mid - 1; // search left half
+        }
+        else
+        {
+            left = mid + 1;  // search right half
+        }
+    }
+
+    return false; // key not found
+}
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::find_left_node_child_index(NodeT *node)
 {

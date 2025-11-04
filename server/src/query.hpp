@@ -44,7 +44,8 @@ enum class QueryError {
     NoArgs,
     InvalidType,
     ColumnAlreadyExists,
-    SearchColumnNotFound
+    SearchColumnNotFound,
+    InsertFromFailed
 };
 
 std::string errorToString(QueryError e);

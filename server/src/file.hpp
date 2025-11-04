@@ -84,6 +84,8 @@ public:
     off_t insert_table(Table *table);
     Table load_table();
 
+    off_t write_record(Record &record);
+
 private:
     void header_block_creation();
     void init_table_block();
@@ -101,7 +103,6 @@ private:
 
     Record get_record(off_t record_location);
 
-    off_t write_record(Record &record);
     Data_Node *load_data_node(off_t location);
 };
 

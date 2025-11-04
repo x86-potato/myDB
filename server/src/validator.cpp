@@ -54,3 +54,19 @@ bool validatePrimaryFind(const Table &table, const std::string &column)
 
     return false;
 }
+
+bool validateColumnList(const Table &table, const StringVec &tokens)
+{
+    int index = 0;
+    for (const auto &token: tokens)
+    {
+        if(token != table.columns[index].name)
+        {
+            return false;
+        }
+        index++;
+    }
+
+
+    return true;
+}

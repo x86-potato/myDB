@@ -41,6 +41,11 @@ using LeafNode8 = LeafNode<8,MaxKeys_8>;
 using LeafNode4 = LeafNode<4, MaxKeys_4>;
 
 
+enum InsertResult
+{
+    Success,
+    Failed
+};
 
 
 class File;
@@ -74,7 +79,7 @@ public:
     BtreePlus(File &file);
     
     //@brief insertes string a and corresponding value b
-    void insert(std::string insert_string, off_t value);
+    InsertResult insert(std::string insert_string, Record &record);
 
     //@brief deletes a key and its value
     void delete_key(std::string delete_string);
@@ -114,6 +119,7 @@ private:
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth);
     int get_underflow_amount();
+    bool leaf_contains(NodeT* leaf, const std::string &key);
 };
 using MyBtree32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
 using MyBtree8  = BtreePlus<Node8, LeafNode8,InternalNode8>;

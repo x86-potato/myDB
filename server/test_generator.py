@@ -1,65 +1,96 @@
 import random
 import string
-from datetime import datetime, timedelta
 
-# Number of users to generate
-N = 100  # change as needed
-filename = "users.sql"
-
-# Xbox-style username components
-adjectives = [
-    "Cool", "Dark", "Epic", "Silent", "Pro", "Crazy", "Fast", "Red", "Blue",
-    "Shadow", "Night", "Mega", "Ultra", "Stealth", "Fire", "Ice", "Ghost", "Wild"
+# All possible fields and their types
+all_fields = [
+    ("username", "string"),
+    ("password", "string"),
+    ("email", "string"),
+    ("age", "int"),
+    ("dob", "string"),
+    ("id", "int")
 ]
 
-nouns = [
-    "Gamer", "Ninja", "Wizard", "Sniper", "Dragon", "Hunter", "Rider",
-    "Warrior", "Slayer", "Ghost", "Assassin", "Knight", "Destroyer", "Shadow", "Blade"
-]
+# Keywords for Xbox-style usernames
+keywords = ["shadow", "dragon", "x", "pro", "gamer", "ninja", "ghost", "wolf", "king", "fire"]
 
-# Helper functions
-def xbox_username():
-    """Generate an Xbox-style username with digits and optional underscores."""
-    name = random.choice(adjectives) + random.choice(nouns)
-    digits = str(random.randint(0, 9999))
-    name += digits
-    if random.choice([True, False]):
-        name = "_" + name + "_"
-    return name
+# --- Data generators ---
+def random_username():
+    first = random.choice(keywords)
+    second = random.choice(keywords)
+    digits = ''.join(random.choice(string.digits) for _ in range(random.randint(0, 4)))
+    return first + second + digits
 
-def simple_password(length=12):
-    """Password with only letters and digits (no special symbols)."""
+def random_password(length=6):
     chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k=length))
+    return ''.join(random.choice(chars) for _ in range(length))
 
-def email_for_username(username):
-    """Generate email with only letters, digits, underscores, @ and dots."""
-    clean_username = username.replace("_", "")
-    domains = ["gmail.com", "yahoo.com", "outlook.com", "example.com"]
-    return f"{clean_username}@{random.choice(domains)}"
+def random_email():
+    names = ['sp', 'cool', 'fun', 'pro', 'x', 'gamer', 'player']
+    domains = ['gmail.com', 'yahoo.com', 'hotmail.com']
+    return random.choice(names) + str(random.randint(1,999)) + "@" + random.choice(domains)
 
-def random_dob(start_year=1950, end_year=2010):
-    """Random date of birth in d/m/yyyy format."""
-    start = datetime(year=start_year, month=1, day=1)
-    end = datetime(year=end_year, month=12, day=31)
-    delta = end - start
-    random_days = random.randint(0, delta.days)
-    dob = start + timedelta(days=random_days)
-    return f"{dob.day}/{dob.month}/{dob.year}"
+def random_int(min_val=1, max_val=100):
+    return str(random.randint(min_val, max_val))
 
-# Generate SQL inserts
-with open(filename, "w") as f:
-    # Table creation line
-    f.write('create users (username=string, password=string, email=string, dob=string);')
-    
-    for _ in range(N):
-        username = xbox_username()
-        password = simple_password()
-        email = email_for_username(username)
-        dob = random_dob()
-        f.write(f'\ninsert into users ("{username}", "{password}", "{email}", "{dob}");')
-    
-    # Exit at the end
-    f.write('\nexit\n')
+def random_dob():
+    year = random.randint(1970, 2010)
+    month = random.randint(1,12)
+    day = random.randint(1,28)
+    return f"{year}-{month:02d}-{day:02d}"
 
-print(f"{N} users written to {filename}")
+generators = {
+    "username": random_username,
+    "password": random_password,
+    "email": random_email,
+    "age": random_int,
+    "dob": random_dob,
+    "id": random_int
+}
+
+# --- CLI: number of rows ---
+while True:
+    num_rows_input = input("Enter number of rows to generate: ")
+    if num_rows_input.isdigit() and int(num_rows_input) > 0:
+        num_rows = int(num_rows_input)
+        break
+    print("Invalid input. Enter a positive integer.")
+
+# --- CLI for picking fields ---
+print("\nAvailable fields:")
+for i, (name, _) in enumerate(all_fields):
+    print(f"{i+1}. {name}")
+
+picked_fields = []
+while True:
+    selection = input("Enter a field number to pick (or press Enter to finish): ")
+    if selection == "":
+        break
+    if not selection.isdigit() or int(selection) < 1 or int(selection) > len(all_fields):
+        print("Invalid choice, try again.")
+        continue
+    field_name = all_fields[int(selection)-1][0]
+    if field_name in picked_fields:
+        print("Field already picked.")
+        continue
+    picked_fields.append(field_name)
+
+if not picked_fields:
+    print("No fields selected. Exiting.")
+    exit()
+
+output_file = "users.csv"
+
+# --- Write data to file ---
+with open(output_file, "w") as f:
+    f.write(",".join(picked_fields) + "\n")
+    for _ in range(num_rows):
+        row = []
+        for field in picked_fields:
+            val = generators[field]()
+            if dict(all_fields)[field] == "string":
+                val = f'"{val}"'
+            row.append(val)
+        f.write(",".join(row) + "\n")
+
+print(f"{num_rows} rows written to {output_file}")

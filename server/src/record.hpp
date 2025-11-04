@@ -4,7 +4,7 @@
 
 
 class Table;  
-
+std::string strip_quotes(const std::string &input);
 
 class Record
 {
@@ -19,7 +19,7 @@ public:
     int length = 0;
 
 
-    Record(const StringVec &tokens, const Table &table);
+    Record(const StringVec &tokens, const Table &table, int offset);
 
     Record(const std::byte* read_from, Table &table);
     

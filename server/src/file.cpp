@@ -60,15 +60,17 @@ File::File()
 template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
 void File::insert_data(std::string key,Record &record, MyBtree index_tree)
 {
-    
-
     NodeT *loaded_node = load_node<NodeT,InternalNodeT, LeafNodeT>(root_node_pointer); 
     if(loaded_node->disk_location == 0) index_tree.init_root();
-    off_t data = write_record(record); 
+
     index_tree.root_node = loaded_node;
 
+    InsertResult result = index_tree.insert(key, record);
 
-    index_tree.insert(key, data);
+    if(result == Failed) {std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; return; }
+
+
+
 
 
 }
