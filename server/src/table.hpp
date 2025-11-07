@@ -11,9 +11,11 @@
 
 enum class Type 
 {
-    UNKNOWN, 
-    STRING, 
+    CHAR32, 
+    CHAR16,
+    CHAR8,
     INTEGER
+    //STRING
 };
 
 namespace TypeUtil {
@@ -27,6 +29,7 @@ namespace TypeUtil {
 struct Column {
     std::string name;
     Type type;
+    off_t indexLocation = -1; //0 if not created yet, -1 if not indexable
     Column();
     Column(std::string name, Type type);
 };

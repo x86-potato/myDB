@@ -29,16 +29,20 @@ struct LeafNode : Node<KeySize, MaxKeys> {
     //char padding[3904] = { 0 };
 };
 using Node32 = Node<32,MaxKeys_32>;
-using Node8 = Node<8, MaxKeys_8>;
-using Node4 = Node<4, MaxKeys_4>;
+using Node16 = Node<16, MaxKeys_16>;
+using Node8 =  Node<8, MaxKeys_8>;
+using Node4 =  Node<4, MaxKeys_4>;
 
 using InternalNode32 = InternalNode<32,MaxKeys_32>;
+using InternalNode16 = InternalNode<16,MaxKeys_16>;
 using InternalNode8 = InternalNode<8,MaxKeys_8>;
 using InternalNode4 = InternalNode<4, MaxKeys_4>;
 
 using LeafNode32 = LeafNode<32,MaxKeys_32>;
+using LeafNode16 = LeafNode<16,MaxKeys_16>;
 using LeafNode8 = LeafNode<8,MaxKeys_8>;
 using LeafNode4 = LeafNode<4, MaxKeys_4>;
+
 
 
 enum InsertResult
@@ -57,9 +61,12 @@ public:
     using InternalNodeType = InternalNodeT;
     NodeT* root_node = nullptr;
     File &file;
+
+    off_t tree_root = 0;
     static constexpr int MaxKeys= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return MaxKeys_8;
         else if constexpr (std::is_same_v<NodeT, Node4>) return MaxKeys_4;
+        else if constexpr (std::is_same_v<NodeT, Node16>) return MaxKeys_16;
         else if constexpr (std::is_same_v<NodeT, Node32>) return MaxKeys_32;
         else return -1; // fallback
     }();
@@ -67,6 +74,7 @@ public:
     static constexpr int KeyLen= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return 8;
         else if constexpr (std::is_same_v<NodeT, Node4>) return 4;
+        else if constexpr (std::is_same_v<NodeT, Node16>) return 16;
         else if constexpr (std::is_same_v<NodeT, Node32>) return 32;
         else return -1; // fallback
     }();
@@ -79,7 +87,7 @@ public:
     BtreePlus(File &file);
     
     //@brief insertes string a and corresponding value b
-    InsertResult insert(std::string insert_string, Record &record);
+    InsertResult insert(std::string insert_string, Record &record, off_t &record_location);
 
     //@brief deletes a key and its value
     void delete_key(std::string delete_string);
@@ -90,7 +98,9 @@ public:
     //@brief prints current objects tree, assumes roo_node is defined and loaded 
     void print_tree();
     //@brief creates the first node and loads it to the cache.
-    void init_root();
+    void init_root(off_t &location);
+    //@brief returns LeafNode Type of the furthest left node
+    LeafNodeT* find_leftmost_leaf();
 private:
     //----------handle deletion----------------
     bool check_underflow(NodeT* node);
@@ -104,7 +114,7 @@ private:
     bool attempt_borrow(NodeT *current, InternalNodeT *parent, int currents_child_index);
     void borrow_left_leaf(NodeT* current, NodeT* left);
     void borrow_right_leaf(NodeT* current, NodeT* right);
-
+    
     //----------handle insertion----------------
     void insert_up_into(Insert_Up_Data data,off_t node_location);
     void split_leaf(NodeT* node);
@@ -113,7 +123,6 @@ private:
     void push_into_internal(InternalNodeT* target, char* value);
     
     //----------utill functions----------------
-    LeafNodeT* find_leftmost_leaf(NodeT* root);
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int find_left_node_child_index(NodeT *node);
@@ -122,5 +131,6 @@ private:
     bool leaf_contains(NodeT* leaf, const std::string &key);
 };
 using MyBtree32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
+using MyBtree16  = BtreePlus<Node16, LeafNode16,InternalNode16>;
 using MyBtree8  = BtreePlus<Node8, LeafNode8,InternalNode8>;
 using MyBtree4  = BtreePlus<Node4, LeafNode4,InternalNode4>;

@@ -9,7 +9,6 @@ bool validate_table(const std::string& table_name, const Table& loaded_table)
 
 bool validate_type(Type type)
 {
-    if (type == Type::UNKNOWN) return false;
     return true;
 }
 

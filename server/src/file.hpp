@@ -20,8 +20,7 @@
 
 
 #define HEADER_TABLE_LOCATION 0
-#define HEADER_ROOT_NODE_LOCATION 8
-#define HEADER_ROOT_DATA_LOCATION 16
+#define HEADER_ROOT_DATA_LOCATION 8
 
 // Forward declarations to avoid circular dependencies
 
@@ -49,49 +48,66 @@ public:
 
     off_t header_pointer;
     off_t table_block_pointer;
-    off_t root_node_pointer;
     off_t free_data_pointer;
 
     int index_block_count = 0;
     int data_blocks_count = 0;
 
     Table primary_table;
+    std::vector<off_t> index_roots;
+
 
     File();
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
     void insert_data(std::string key, Record &record, MyBtree index_tree);
 
-    template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-    Record find(std::string key, MyBtree index_tree);
+    template <typename MyBtree>
+    off_t insert_primary_index(std::string key,Record &record, MyBtree &tree);
 
-    void update_root_pointer();
+    template <typename MyBtree>
+    void insert_secondary_index(std::string key,Record &record, MyBtree &tree,
+     off_t root, off_t record_location, int index);
+
+    template <typename PrimaryTree>
+    void parse_primary_tree(PrimaryTree &tree);
+
+    template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
+    void generate_index(int columnIndex, 
+     MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4);
+
+    template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
+    Record find(std::string key, MyBtree &index_tree, off_t root_location);
+
+    void update_root_pointer(int index, off_t value);
 
     off_t alloc_block();
 
     template<typename NodeT>
-    void update_node(NodeT *node, off_t node_location);
+    void update_node(NodeT *node, off_t node_location, size_t size);
 
     template<typename LeafNodeT>
     void update_leafnode(LeafNodeT *node, off_t node_location);
 
-    template<typename NodeT, typename InternalNodeT, typename LeafNodeT>
+    template<typename NodeT>
     NodeT* load_node(off_t disk_offset);
 
     template<typename BtreeT>
     void print_leaves(off_t disk_node_offset);
 
+    template <typename Node32,typename Node16, typename Node8, typename Node4>
     off_t insert_table(Table *table);
     Table load_table();
 
     off_t write_record(Record &record);
+    Record get_record(off_t record_location);
 
 private:
     void header_block_creation();
     void init_table_block();
 
     template<typename NodeT>
-    void init_root_node();
+    void init_node(off_t location);
 
     void init_data_node(off_t location);
 
@@ -101,7 +117,6 @@ private:
 
     int open_file();
 
-    Record get_record(off_t record_location);
 
     Data_Node *load_data_node(off_t location);
 };

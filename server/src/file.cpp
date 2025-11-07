@@ -37,7 +37,7 @@ File::File()
 
         
         
-        std::cout << "table block,root node, root data: "<< table_block_pointer << " "<< root_node_pointer  << " " << free_data_pointer << std::endl;
+        std::cout << "table block,root node, root data: "<< table_block_pointer << " " << free_data_pointer << std::endl;
 
         //primary_table = load_table();
     }
@@ -46,12 +46,11 @@ File::File()
         header_pointer = 0;
         
         table_block_pointer = get_table_block();
-        root_node_pointer = get_root_node();
         free_data_pointer = get_data();
 
         primary_table = load_table();
         primary_table.table_print();
-        std::cout << "table block,root node, root data: "<< table_block_pointer << " "<< root_node_pointer  << " " << free_data_pointer << std::endl;
+        std::cout << "table block,root node, root data: "<< table_block_pointer   << " " << free_data_pointer << std::endl;
 
     }
 }
@@ -60,36 +59,165 @@ File::File()
 template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
 void File::insert_data(std::string key,Record &record, MyBtree index_tree)
 {
-    NodeT *loaded_node = load_node<NodeT,InternalNodeT, LeafNodeT>(root_node_pointer); 
-    if(loaded_node->disk_location == 0) index_tree.init_root();
-
-    index_tree.root_node = loaded_node;
-
-    InsertResult result = index_tree.insert(key, record);
-
-    if(result == Failed) {std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; return; }
-
-
+    //handle index insertions
 
 
 
 }
 
-template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-Record File::find(std::string key, MyBtree index_tree)
+template <typename MyBtree>
+off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree)
 {
+    
+    using NodeT = typename MyBtree::NodeType;
+    NodeT *loaded_node = load_node<NodeT>(primary_table.columns[0].indexLocation); 
+    if(loaded_node->disk_location == 0) tree.init_root(primary_table.columns[0].indexLocation);
+
+    tree.root_node = loaded_node;
+    tree.tree_root = primary_table.columns[0].indexLocation;
+    InsertResult result;
+
+    off_t record_location = 0;
+
+    result = tree.insert(key, record, record_location);
+
+
+
+    if(result == Failed) {std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; return 0; }
+
+    if(primary_table.columns[0].indexLocation != tree.tree_root)
+    {
+        primary_table.columns[0].indexLocation = tree.tree_root;
+        update_root_pointer(0, primary_table.columns[0].indexLocation);
+    }
+
+
+    return record_location;
+
+}
+
+template <typename PrimaryTree>
+void File::parse_primary_tree(PrimaryTree &tree)
+{
+    using PrimaryNodeT = typename PrimaryTree::NodeType;
+    using PrimaryLeafNodeT = typename PrimaryTree::LeafNodeType;
+    using PrimaryInternalNodeT = typename PrimaryTree::InternalNodeType;
+
+    PrimaryNodeT *node = load_node<PrimaryNodeT>(primary_table.columns[0].indexLocation);
+    std::string type;
+    PrimaryInternalNodeT* internal_node_cast;
+
+    while (!node->is_leaf)    
+    {
+        internal_node_cast = static_cast<PrimaryInternalNodeT*>(node);
+        node = load_node<PrimaryNodeT>(internal_node_cast->children[0]);
+    }
+
+    //here we reach the left most node
+    PrimaryLeafNodeT* node_cast = static_cast<PrimaryLeafNodeT*>(node);
+
+    //allocate the root
+
+
+    while (node_cast)
+    {
+        for (int i = 0; i < node_cast->current_key_count; i++)
+        {
+            //record_locations.push_back(node_cast->values[i]);
+        }
+        off_t next_leaf = node_cast->next_leaf;
+        if(next_leaf == 0)
+            node_cast = nullptr;
+        else
+        {
+            node = load_node<PrimaryNodeT>(next_leaf);
+            node_cast = static_cast<PrimaryLeafNodeT*>(node);
+        }
+    }
+
+}
+
+
+
+template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
+void File::generate_index(int columnIndex, 
+    MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4)
+{
+    primary_table.columns[columnIndex].indexLocation = alloc_block();
+    update_root_pointer(columnIndex, primary_table.columns[columnIndex].indexLocation);
+
+    //pick whcih tree to create
+    switch (primary_table.columns[columnIndex].type)
+    {
+        case Type::INTEGER:{
+            init_node<typename MyBtree4::NodeType>(primary_table.columns[columnIndex].indexLocation);
+            break;
+        } 
+        case Type::CHAR32:{
+            init_node<typename MyBtree32::NodeType>(primary_table.columns[columnIndex].indexLocation);
+            break;
+        }
+        case Type::CHAR16:{
+            init_node<typename MyBtree16::NodeType>(primary_table.columns[columnIndex].indexLocation);
+            break;
+        }
+        case Type::CHAR8:{
+            init_node<typename MyBtree8::NodeType>(primary_table.columns[columnIndex].indexLocation);
+            break;
+        }
+    }
+
+
+
+}
+
+template <typename MyBtree>
+void File::insert_secondary_index(std::string key,Record &record, MyBtree &tree,
+     off_t root, off_t record_location, int index)
+{
+    using NodeT = typename MyBtree::NodeType;
+    NodeT *loaded_node = load_node<NodeT>(root); 
+    if(loaded_node->disk_location == 0) tree.init_root(root);
+
+    tree.root_node = loaded_node;
+    tree.tree_root = root;
+    InsertResult result;
+
+
+    result = tree.insert(key, record, record_location);
+
+
+
+    if(result == Failed) {std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; return; }
+
+    if(root != tree.tree_root)
+    {
+        root = tree.tree_root;
+        update_root_pointer(index, root);
+    }
+}
+
+template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
+Record File::find(std::string key, MyBtree &index_tree, off_t root_location)
+{
+    index_tree.tree_root = root_location;
     off_t location = index_tree.search(key);
+
 
     Record temp = get_record(location);
 
     return temp;
 }
 
-void File::update_root_pointer()    
+void File::update_root_pointer(int index, off_t value)    
 {
-    Page* page = cache.read_block(header_pointer); // Use the correct header pointer!
+    Page* page = cache.read_block(table_block_pointer); // Use the correct header pointer!
 
-    cache.write_to_page(page, HEADER_ROOT_NODE_LOCATION, &root_node_pointer, sizeof(root_node_pointer),header_pointer);
+    primary_table.columns[index].indexLocation = value;
+
+    std::vector<std::byte> casted = cast_to_bytes(&primary_table);
+
+    cache.write_to_page(page, 0, casted.data(), casted.size(), table_block_pointer);
 
 }
 
@@ -112,11 +240,15 @@ off_t File::alloc_block()
 }
 
 template<typename NodeT>
-void File::update_node(NodeT *node, off_t node_location)
+void File::update_node(NodeT *node, off_t node_location, size_t size)
 {
     Page* page = cache.read_block(node_location);
 
-    cache.write_to_page(page,0,node,BLOCK_SIZE, node_location);
+    int write_size = 0;
+
+    
+
+    cache.write_to_page(page,0,node, size, node_location);
 
 }
 template<typename LeafNodeT>
@@ -128,7 +260,7 @@ void File::update_leafnode(LeafNodeT *node, off_t node_location)
 
 }
 
-template<typename NodeT, typename InternalNodeT, typename LeafNodeT>
+template<typename NodeT>
 NodeT* File::load_node(off_t disk_offset) {
     Page* page = cache.read_block(disk_offset);
 
@@ -145,10 +277,6 @@ void File::print_leaves(off_t disk_node_offset)
     using InternalNodeT = typename BtreeT::InternalNodeType;
 
 
-    if (root_node_pointer == 0) {
-        std::cout << "Tree is empty\n";
-        return;
-    }
 
     //we will call this recursively on each nodes leaves
     NodeT *node = load_node<NodeT, LeafNodeT, InternalNodeT>(disk_node_offset);
@@ -189,15 +317,39 @@ void File::print_leaves(off_t disk_node_offset)
     }
 }
 
-
+template <typename Node32,typename Node16, typename Node8, typename Node4>
 off_t File::insert_table(Table *table)
 {
     Page *page = cache.read_block(table_block_pointer);
+
+    //init primary root
+
+    off_t location = alloc_block();
+    table->columns[0].indexLocation = location;
+    switch (table->columns[0].type)
+    {
+        case Type::INTEGER:{
+            init_node<Node4>(location);
+            break;
+        }
+        case Type::CHAR32:{
+            init_node<Node32>(location);
+            break;
+        }
+        case Type::CHAR16:{
+            init_node<Node8>(location);
+            break;
+        }
+        case Type::CHAR8:{
+            init_node<Node8>(location);
+            break;
+        }
+    }
+
     
     std::vector<std::byte> casted_table = cast_to_bytes(table);
     auto *table_data = casted_table.data();
 
-        
 
 
     memcpy(page,table_data,casted_table.size());
@@ -218,6 +370,15 @@ Table File::load_table()
 
 
     Table output_table(page->buffer, 256);
+
+    for (auto &i: output_table.columns)
+    {
+        if(i.indexLocation != -1)
+        {
+            index_roots.push_back(i.indexLocation);
+        }
+    }
+    
     return output_table;
 }
 
@@ -228,40 +389,34 @@ void File::header_block_creation()
 
     Page* header_page = cache.read_block(header_pointer);
 
-    std::byte temp_header[24];
+    std::byte temp_header[16];
 
     //set table block pointer
     table_block_pointer = this->alloc_block();
     memcpy(&temp_header[0],&table_block_pointer,8);
 
-    //init_table_block();
-    //set root node pointer
-    root_node_pointer = this->alloc_block();
-    memcpy(&temp_header[8],&root_node_pointer,8);
-    
-    //init_root_node<Node8>();
     
     //set root data node pointer
     free_data_pointer = this->alloc_block();
-    memcpy(&temp_header[16],&free_data_pointer,8);
+    memcpy(&temp_header[8],&free_data_pointer,8);
 
 
     init_data_node(free_data_pointer);
 
-    cache.write_to_page(header_page,0,temp_header,24, 0);
+    cache.write_to_page(header_page,0,temp_header,16, 0);
 
 
-    //cache.flush_cache();
+    cache.flush_cache();
 }
 //void File::init_table_block();
 template<typename NodeT>
-void File::init_root_node()
+void File::init_node(off_t location)
 {
     NodeT node;
-    node.disk_location = root_node_pointer;
+    node.disk_location = 0;
     node.is_leaf = true;
     
-    File::update_node(&node,node.disk_location);
+    File::update_node(&node, location, sizeof(NodeT));
 
 }
 void File::init_data_node(off_t location)
@@ -356,7 +511,7 @@ Record File::get_record(off_t record_location)
 
     Record record(page->buffer + record_offset, primary_table);
 
-    std::cout << "\nFound: " << record.str;
+   // std::cout << "\nFound: " << record.str;
 
     return record;
 
@@ -434,26 +589,54 @@ Data_Node *File::load_data_node(off_t location)
     return temp_node;
 }
 
-template Node4* File::load_node<Node4, InternalNode4, LeafNode4>(off_t);
-template void File::update_node<Node4>(Node4*, off_t);
-template void File::update_node<InternalNode4>(InternalNode4*, off_t);
+template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table*);
+template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, MyBtree32&,MyBtree16&,MyBtree8&,MyBtree4&);
 
-template Node8* File::load_node<Node8, InternalNode8, LeafNode8>(off_t);
-template void File::update_node<Node8>(Node8*, off_t);
-template void File::update_node<InternalNode8>(InternalNode8*, off_t);
+template Node4* File::load_node<Node4>(off_t);
+template void File::update_node<Node4>(Node4*, off_t, size_t);
+template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t);
 
-template Node32* File::load_node<Node32, InternalNode32, LeafNode32>(off_t);
-template void File::update_node<Node32>(Node32*, off_t);
-template void File::update_node<InternalNode32>(InternalNode32*, off_t);
+template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&);
+template void File::insert_secondary_index<MyBtree4>(std::string,Record&, MyBtree4&,off_t, off_t, int);
+template void File::parse_primary_tree<MyBtree4>(MyBtree4&);
 
+
+
+
+template Node8* File::load_node<Node8>(off_t);
+template void File::update_node<Node8>(Node8*, off_t, size_t);
+template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t);
+
+template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&);
+template void File::insert_secondary_index<MyBtree8>(std::string,Record&, MyBtree8&,off_t, off_t, int);
+template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
+
+template Node16* File::load_node<Node16>(off_t);
+template void File::update_node<Node16>(Node16*, off_t, size_t);
+template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t);
+
+template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&);
+template void File::insert_secondary_index<MyBtree16>(std::string,Record&, MyBtree16&,off_t, off_t, int);
+template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
+
+
+template Node32* File::load_node<Node32>(off_t);
+template void File::update_node<Node32>(Node32*, off_t, size_t);
+template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t);
+
+template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&);
+template void File::insert_secondary_index<MyBtree32>(std::string,Record&, MyBtree32&,off_t, off_t, int);
+template void File::parse_primary_tree<MyBtree32>(MyBtree32&);
 
 template void File::insert_data<MyBtree32, Node32, LeafNode32, InternalNode32>(std::string, Record&, MyBtree32);
+template void File::insert_data<MyBtree16, Node16, LeafNode16, InternalNode16>(std::string, Record&, MyBtree16);
 template void File::insert_data<MyBtree8, Node8, LeafNode8, InternalNode8>(std::string, Record&, MyBtree8);
 template void File::insert_data<MyBtree4, Node4, LeafNode4, InternalNode4>(std::string, Record&, MyBtree4);
 
-template Record File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32);
-template Record File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8);
-template Record File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4);
+template Record File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32&, off_t);
+template Record File::find<MyBtree16, Node16, InternalNode16,LeafNode16>(std::string, MyBtree16&, off_t);
+template Record File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8&, off_t);
+template Record File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4&, off_t);
 
 
 

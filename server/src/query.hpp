@@ -69,7 +69,8 @@ namespace Query {
         File& file,
         MyBtree32* IndexTree32,
         MyBtree8* IndexTree8,
-        MyBtree4* IndexTree4
+        MyBtree4* IndexTree4,
+        MyBtree16 *IndexTree16
     );
 
 } // namespace Query

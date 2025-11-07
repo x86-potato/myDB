@@ -18,6 +18,8 @@ public:
     std::string str;
     int length = 0;
 
+    std::string get_token(int index);
+
 
     Record(const StringVec &tokens, const Table &table, int offset);
 

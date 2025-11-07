@@ -8,7 +8,7 @@ all_fields = [
     ("email", "string"),
     ("age", "int"),
     ("dob", "string"),
-    ("id", "int")
+    ("uid", "int")
 ]
 
 # Keywords for Xbox-style usernames
@@ -30,7 +30,7 @@ def random_email():
     domains = ['gmail.com', 'yahoo.com', 'hotmail.com']
     return random.choice(names) + str(random.randint(1,999)) + "@" + random.choice(domains)
 
-def random_int(min_val=1, max_val=100):
+def random_int(min_val=1, max_val=100000000):
     return str(random.randint(min_val, max_val))
 
 def random_dob():
@@ -45,7 +45,7 @@ generators = {
     "email": random_email,
     "age": random_int,
     "dob": random_dob,
-    "id": random_int
+    "uid": random_int
 }
 
 # --- CLI: number of rows ---

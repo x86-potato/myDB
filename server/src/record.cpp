@@ -17,6 +17,30 @@ std::string strip_quotes(const std::string &input)
     return output;
 }
 
+std::string Record::get_token(int index)
+{
+    std::string token;
+    int curr_index = 0;
+    char* parser = str.data();
+
+    while(curr_index != index)
+    {
+        if(parser[0] == ' ')
+        {
+            curr_index++;
+        }
+        parser++;
+    }
+
+    while (parser[0] != ' ' && parser[0] != ';')
+    {
+        token += parser[0];
+        parser++;
+    }
+
+    return token;
+}
+
 Record::Record(const StringVec &tokens,const Table &table, int offset)
 {
     for(long unsigned int i = offset; i < tokens.size(); i++)
@@ -46,17 +70,22 @@ Record::Record(const StringVec &tokens,const Table &table, int offset)
                 
                 break;
             }
-            case Type::STRING:
+            case Type::CHAR32:
             {
-
                 str += strip_quotes(tokens[i]);
                 break;
             }
-            case Type::UNKNOWN:
+            case Type::CHAR16:
             {
-
+                str += strip_quotes(tokens[i]);
                 break;
             }
+            case Type::CHAR8:
+            {
+                str += strip_quotes(tokens[i]);
+                break;
+            }
+
         }
         if(length == -1)
         {
@@ -74,51 +103,35 @@ Record::Record(const StringVec &tokens,const Table &table, int offset)
 }
 
 
-Record::Record(const std::byte* read_from, Table& table)
-{
-    char* char_cast = (char*)(read_from);
-    int i = 0;
+Record::Record(const std::byte* read_from, Table& table) {
+    const char* p = reinterpret_cast<const char*>(read_from);
+    str.clear();
 
-    char int_buffer[4];
-    int buffer_index = 0;
+    for (size_t i = 0; i < table.columns.size(); ++i) {
+        Type t = table.columns[i].type;
 
-    Type current_type = table.columns[i].type; 
-
-    while(*char_cast != ';')
-    {
-        if(current_type == Type::STRING)
-        {
-            str += *char_cast;
-        }
-        else if (current_type == Type::INTEGER)
-        {
-            int_buffer[buffer_index] = *char_cast;
-            buffer_index++;
-
-
-        }
-
-        if(*char_cast == ' ')
-        {
-            if(buffer_index != 0)
-            {
-                int test;
-
-                memcpy(&test, int_buffer, 4);
-
-                buffer_index = 0;
-
-                str.append(std::to_string(test));
-
-                str += ' ';
+        if (t == Type::INTEGER) {
+            int val;
+            memcpy(&val, p, sizeof(int));
+           // 24423112
+            str += std::to_string(val);
+            p += sizeof(int);
+        } else {
+            // Read until space or semicolon
+            while (*p != ' ' && *p != ';') {
+                str += *p;
+                p++;
             }
-            i++;
-            current_type = table.columns[i].type;
         }
 
-        char_cast++;
+        if (*p == ' ') {
+            str += ' ';
+            p++;
+        } else if (*p == ';') {
+            str += ';';
+            break;
+        }
     }
 
-    str += ';';
     length = str.length();
 }
