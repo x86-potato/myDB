@@ -1,37 +1,37 @@
 CC = g++
 CFLAGS = -g -std=c++17
 
-#directories
 SRC_DIR = src
 OBJ_DEST_DIR = obj
 BIN_DIR = bin
 
-#files
-SRC = $(wildcard $(SRC_DIR)/*.cpp)
-OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DEST_DIR)/%.o,$(SRC))
+# recursively find all .cpp files
+SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp')
+
+# turn src/.../file.cpp into obj/.../file.o
+OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DEST_DIR)/%.o,$(SRC))
+
 EXEC = $(BIN_DIR)/a.out
 
 all: $(EXEC)
 
-#linker
 $(EXEC): $(OBJ) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-#into obj dir
-$(OBJ_DEST_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DEST_DIR)
+# compile rule, create subdirectories as needed
+$(OBJ_DEST_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
 
 clean:
-	rm -f $(OBJ) $(EXEC)
+	rm -rf $(OBJ_DEST_DIR) $(EXEC)
 
 run: $(EXEC)
 	./$(EXEC)
 
-.PHONY: test
+.PHONY: all clean run test
 test: clean $(EXEC)
 	./$(EXEC)
-
-
-.PHONY: all clean run

@@ -1,4 +1,4 @@
-#include "query.hpp"
+#include "querylegacy.hpp"
 #include <cstddef> // for std::size_t
 
 
@@ -92,15 +92,15 @@ namespace Query
     }
     off_t insertCHAR8(MyBtree8 *indexTree, Record &record, std::string primaryKey, File &file)
     {
-        return file.insert_primary_index<MyBtree8>(primaryKey, record, *indexTree);
+        return file.insert_primary_index<MyBtree8>(strip_quotes(primaryKey), record, *indexTree);
     }
     off_t insertCHAR16(MyBtree16 *indexTree, Record &record, std::string primaryKey, File &file)
     {
-        return file.insert_primary_index<MyBtree16>(primaryKey, record, *indexTree);
+        return file.insert_primary_index<MyBtree16>(strip_quotes(primaryKey), record, *indexTree);
     }
     off_t insertCHAR32(MyBtree32 *indexTree, Record &record, std::string primaryKey, File &file)
     {
-        return file.insert_primary_index<MyBtree32>(primaryKey, record, *indexTree);
+        return file.insert_primary_index<MyBtree32>(strip_quotes(primaryKey), record, *indexTree);
     }
     off_t insertINTEGER(MyBtree4 *indexTree, Record &record, std::string primaryKey, File &file)
     {
@@ -364,6 +364,7 @@ namespace Query
                     }
                 }
                 if(to_search == nullptr) { catch_error(QueryError::SearchColumnNotFound);return;}
+                std::vector<Record> records;
                 switch (to_search->type)
                 {
                     case Type::INTEGER:
@@ -373,31 +374,31 @@ namespace Query
                         uint32_t be = htobe32(static_cast<uint32_t>(val));
                         std::string converted(4, '\0');
                         memcpy(&converted[0], &be, 4);
-                        Record record = file.find<MyBtree4, Node4, InternalNode4, LeafNode4>(converted, *IndexTree4, to_search->indexLocation);
-                        std::cout << record.str;
+                        records = file.find<MyBtree4, Node4, InternalNode4, LeafNode4>(converted, *IndexTree4, to_search->indexLocation);
                         break;
                     }
                     case Type::CHAR32:
                     {
-                        Record record = file.find<MyBtree32, Node32, InternalNode32, LeafNode32>(search_word, *IndexTree32, to_search->indexLocation);
-                        std::cout << record.str;
+                        records = file.find<MyBtree32, Node32, InternalNode32, LeafNode32>(search_word, *IndexTree32, to_search->indexLocation);
                         break;
                     }
                     case Type::CHAR16:
                     {
-                        Record record = file.find<MyBtree16, Node16, InternalNode16, LeafNode16>(search_word, *IndexTree16, to_search->indexLocation);
-                        std::cout << record.str;
+                        records = file.find<MyBtree16, Node16, InternalNode16, LeafNode16>(search_word, *IndexTree16, to_search->indexLocation);
                         break;
                     }
                     case Type::CHAR8:
                     {
-                        Record record = file.find<MyBtree8, Node8, InternalNode8, LeafNode8>(search_word, *IndexTree8, to_search->indexLocation);
-                        std::cout << record.str;
+                        records = file.find<MyBtree8, Node8, InternalNode8, LeafNode8>(search_word, *IndexTree8, to_search->indexLocation);
                         break;
                     }
 
                 }
-
+                for (auto &record: records)
+                {
+                    std::cout << "Found: " << record.str << "\n";
+                }
+                std::cout << "Total Found" << records.size() << "\n";
                 result.error = QueryError::None;
                 query_return(command,result); return;
             }
@@ -447,13 +448,13 @@ namespace Query
                                 break;
                         }
 
-                        if(file.primary_table.columns.size() != 1)
+                        if(file.primary_table.columns.size() != 1 && record_location != 0)
                         {
                             for (int i = 1; i < file.primary_table.columns.size(); i++)
                             {
                                 Type secondaryKeyType = file.primary_table.columns[i].type;
                                 off_t index_location = file.primary_table.columns[i].indexLocation;
-                                std::string key = tokens[3+i];
+                                std::string key = insertLine[i];
                                 if(file.primary_table.columns[i].indexLocation != -1)
                                 {
                                     insertSecondary(IndexTree32, IndexTree16, IndexTree8, IndexTree4, 

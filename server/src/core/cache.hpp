@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config.h"
+#include "../config.h"
 #include <iostream>
 #include <sys/mman.h>
 #include <unistd.h>

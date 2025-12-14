@@ -11,39 +11,48 @@ all_fields = [
     ("uid", "int")
 ]
 
-# Keywords for Xbox-style usernames
-keywords = ["shadow", "dragon", "x", "pro", "gamer", "ninja", "ghost", "wolf", "king", "fire"]
+# Shorter keywords for username construction
+short_keywords = [
+    "sh", "dr", "x", "pr", "gm", "nj", "gh", "wf", "kg", "fr",
+    "st", "bl", "ht", "sn", "dk", "lt", "rg", "dm", "sk", "ph", "zr"
+]
 
 # --- Data generators ---
 def random_username():
-    first = random.choice(keywords)
-    second = random.choice(keywords)
-    digits = ''.join(random.choice(string.digits) for _ in range(random.randint(0, 4)))
-    return first + second + digits
+    # Pick 2-3 short keywords
+    parts = [random.choice(short_keywords) for _ in range(random.randint(2, 3))]
+    # Fill the rest with digits up to 16 chars
+    base = ''.join(parts)
+    max_digits = 16 - len(base)
+    digits = ''.join(random.choice(string.digits) for _ in range(max_digits))
+    return (base + digits)[:16]  # enforce max length 16
 
-def random_password(length=6):
+def random_password(length=32):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
-def random_email():
-    names = ['sp', 'cool', 'fun', 'pro', 'x', 'gamer', 'player']
+def random_email(username):
     domains = ['gmail.com', 'yahoo.com', 'hotmail.com']
-    return random.choice(names) + str(random.randint(1,999)) + "@" + random.choice(domains)
+    email = username + "@" + random.choice(domains)
+    return email[:32]  # max 32 chars
 
 def random_int(min_val=1, max_val=100000000):
     return str(random.randint(min_val, max_val))
 
+def random_age():
+    return str(random.randint(13, 80))
+
 def random_dob():
+    month = random.randint(1, 12)
+    day = random.randint(1, 28)
     year = random.randint(1970, 2010)
-    month = random.randint(1,12)
-    day = random.randint(1,28)
-    return f"{year}-{month:02d}-{day:02d}"
+    return f"{month:02d}{day:02d}{year}"
 
 generators = {
     "username": random_username,
     "password": random_password,
-    "email": random_email,
-    "age": random_int,
+    "email": lambda: "",  # placeholder, email depends on username
+    "age": random_age,
     "dob": random_dob,
     "uid": random_int
 }
@@ -84,10 +93,19 @@ output_file = "users.csv"
 # --- Write data to file ---
 with open(output_file, "w") as f:
     f.write(",".join(picked_fields) + "\n")
-    for _ in range(num_rows):
+    for uid_counter in range(1, num_rows + 1):
         row = []
+        username_val = ""
         for field in picked_fields:
-            val = generators[field]()
+            if field == "email":
+                val = random_email(username_val)
+            elif field == "username":
+                username_val = generators["username"]()
+                val = username_val
+            elif field == "uid":
+                val = str(uid_counter)
+            else:
+                val = generators[field]()
             if dict(all_fields)[field] == "string":
                 val = f'"{val}"'
             row.append(val)

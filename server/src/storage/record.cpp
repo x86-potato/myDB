@@ -1,8 +1,7 @@
-#include "config.h"
+#include "../config.h"
 #include "record.hpp"
-#include "query.hpp"
-#include "file.hpp"
-#include "validator.hpp"
+#include "../storage/file.hpp"
+#include "../query/validator.hpp"
 
 
 std::string strip_quotes(const std::string &input)
@@ -49,10 +48,10 @@ Record::Record(const StringVec &tokens,const Table &table, int offset)
         {
             case Type::INTEGER:
             {
-                if(!validate_INTEGER_token(tokens[i])){
-                    length = -1;    //mark to throw error
-                    break;
-                }
+                //if(!validate_INTEGER_token(tokens[i])){
+                //    length = -1;    //mark to throw error
+                //    break;
+                //}
                 
                 int32_t number = std::stoi(tokens[i]);
 

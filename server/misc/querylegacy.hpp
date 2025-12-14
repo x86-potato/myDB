@@ -4,11 +4,11 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include "config.h"
-#include "table.hpp"
+#include "../config.h"
+#include "../core/table.hpp"
 #include "tokenizer.hpp"
-#include "file.hpp"
-#include "btree.hpp"
+#include "../storage/file.hpp"
+#include "../core/btree.hpp"
 #include "validator.hpp"
 
 

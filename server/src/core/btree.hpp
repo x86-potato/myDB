@@ -5,8 +5,8 @@
 #include <string>
 
 
-#include "config.h"
-#include "file.hpp"
+#include "../config.h"
+#include "../storage/file.hpp"
 
 
 template<size_t KeySize, size_t MaxKeys>
@@ -60,7 +60,7 @@ public:
     using LeafNodeType = LeafNodeT;
     using InternalNodeType = InternalNodeT;
     NodeT* root_node = nullptr;
-    File &file;
+    File *file = nullptr;
 
     off_t tree_root = 0;
     static constexpr int MaxKeys= []() {
@@ -80,11 +80,12 @@ public:
     }();
     bool is_less_than(const char left[KeyLen], const char right[KeyLen]);
     struct Insert_Up_Data {
-        char key[KeyLen];
+        char key[KeyLen] = {0};
         off_t left_child = 0;
         off_t right_child = 0;
     };
-    BtreePlus(File &file);
+    BtreePlus();
+    BtreePlus(File *file);
     
     //@brief insertes string a and corresponding value b
     InsertResult insert(std::string insert_string, Record &record, off_t &record_location);
@@ -93,8 +94,7 @@ public:
     void delete_key(std::string delete_string);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
-    off_t search(std::string search_string);
-
+    std::vector<off_t> search(std::string search_string);
     //@brief prints current objects tree, assumes roo_node is defined and loaded 
     void print_tree();
     //@brief creates the first node and loads it to the cache.
@@ -126,9 +126,10 @@ private:
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int find_left_node_child_index(NodeT *node);
-    void print_recursive(NodeT* node, int depth);
+    void print_recursive(NodeT* node, int depth, std::ostream& out);
     int get_underflow_amount();
     bool leaf_contains(NodeT* leaf, const std::string &key);
+    off_t search_recursive(char* search_key, InternalNodeT* node);
 };
 using MyBtree32 = BtreePlus<Node32, LeafNode32, InternalNode32>;
 using MyBtree16  = BtreePlus<Node16, LeafNode16,InternalNode16>;

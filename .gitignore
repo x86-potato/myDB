@@ -1,6 +1,8 @@
 /.vscode
 /server/database.db
+/server/databasebig.db
 /server/tests/*
 /server/obj/*
 /server/bin/*
+/server/users.csv
 

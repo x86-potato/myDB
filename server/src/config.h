@@ -11,11 +11,13 @@ constexpr unsigned long MEM_LIMIT = CACHE_PAGE_LIMIT * 4096;
 constexpr double MEM_LIMIT_GIGS = MEM_LIMIT/(1024.0*1024.0*1024.0);
 constexpr int BLOCK_SIZE = 4096;
 
-constexpr int MaxKeys_4 = 3;
+constexpr int MaxKeys_4 = 339;
 constexpr int MaxKeys_8  = 254;  //254
 constexpr int MaxKeys_16 = 169;
-constexpr int MaxKeys_32 = 4; //pad 24 for 101 pad 3904 for 4
+constexpr int MaxKeys_32 = 101; //pad 24 for 101 pad 3904 for 4
 
+
+constexpr int MAX_COLUMN_NAME = 16;
 
 
 

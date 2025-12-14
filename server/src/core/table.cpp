@@ -1,4 +1,4 @@
-#include "config.h"
+#include "../config.h"
 #include "table.hpp"
 
 namespace TypeUtil {
@@ -64,7 +64,7 @@ Column::Column(std::string name, Type type)
 }
 
 // ----------------------- Table -----------------------
-Table::Table() : name("none")
+Table::Table()
 {
 }
 

@@ -1,0 +1,96 @@
+#include "executor.hpp"
+
+Executor::Executor (Database &database) : database(database)
+{
+
+
+}
+
+
+void Executor::execute (const std::string &input)
+{
+    std::vector<Token> tokenList;
+    std::unique_ptr<AST::Query> queryAST;
+
+    Lexer::tokenize(input, tokenList);
+
+
+    ParserNameSpace::Parser parser;
+    ParserNameSpace::ParserReturn output = parser.parse(tokenList);
+    queryAST = std::move(output.queryPointer);
+
+    if (output.code != 0) return;
+
+    switch (queryAST->type) {
+        case AST::QueryType::CreateTable:
+            execute_create_table(
+                static_cast<AST::CreateTableQuery*>(queryAST.get())
+            );
+            break;
+            
+        case AST::QueryType::Insert:
+            execute_insert(
+                static_cast<AST::InsertQuery*>(queryAST.get())
+            );
+            break;
+            
+        case AST::QueryType::Find:
+            //execute_select(
+            //    static_cast<AST::FindQuery*>(queryAST.get())
+            //);
+            break;
+            
+        case AST::QueryType::CreateIndex:
+            //execute_create_index(
+            //    static_cast<AST::CreateIndexQuery*>(queryAST.get())
+            //);
+            break;
+            
+    }
+}
+
+
+
+void Executor::execute_select(AST::FindQuery* query) {
+    //auto results = database.find(query->key, query->index_column);
+    //display_results(results);
+}
+
+void Executor::execute_create_table(AST::CreateTableQuery* query) {
+    if (validateCreateTableQuery(*query, database) == false)
+    {
+        return;
+    }
+
+    //if here, the query is valid and may be applied to database with no chance of conflict
+    Table newTable;
+    newTable.name = query->tableName;
+    
+    for (auto& arg : query->args)
+    {
+        Type type = TypeUtil::string_to_type(arg.type);
+        Column newColumn(arg.column, type);
+
+        newTable.columns.push_back(newColumn);
+    }
+
+    database.file->insert_table<Node32, Node16, Node8, Node4>(newTable);
+    database.tableMap.insert({query->tableName, newTable});
+}
+
+void Executor::execute_insert(AST::InsertQuery* query) {
+    if (validateInsertQuery(*query, database) == false)
+    {
+        return;
+    }
+
+    StringVec values;
+    
+    for (auto &arg: query->args)
+    {
+        values.push_back(arg.value);
+    }
+
+    database.insert(query->tableName, values);
+
+}

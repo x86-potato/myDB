@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "config.h"
+#include "../config.h"
 
 //TYPE defines the type of key that is per column,
 //STRING is NOT indexable, must be 

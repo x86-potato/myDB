@@ -10,12 +10,11 @@
 #include <fcntl.h>
 
 
-#include "config.h"
-#include "cache.hpp"
-#include "table.hpp"
+#include "../config.h"
+#include "../core/cache.hpp"
+#include "../core/table.hpp"
 #include "record.hpp"
-
-
+#include "../core/btree.hpp"
 
 
 
@@ -24,6 +23,8 @@
 
 // Forward declarations to avoid circular dependencies
 
+
+class Database;
 
 enum status {
     EMPTY,
@@ -53,8 +54,8 @@ public:
     int index_block_count = 0;
     int data_blocks_count = 0;
 
-    Table primary_table;
-    std::vector<off_t> index_roots;
+
+    Database *database;
 
 
     File();
@@ -77,7 +78,7 @@ public:
      MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-    Record find(std::string key, MyBtree &index_tree, off_t root_location);
+    std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location);
 
     void update_root_pointer(int index, off_t value);
 
@@ -96,15 +97,15 @@ public:
     void print_leaves(off_t disk_node_offset);
 
     template <typename Node32,typename Node16, typename Node8, typename Node4>
-    off_t insert_table(Table *table);
-    Table load_table();
+    off_t insert_table(Table table);
+    std::vector<Table> load_table();
 
     off_t write_record(Record &record);
     Record get_record(off_t record_location);
 
 private:
     void header_block_creation();
-    void init_table_block();
+    void init_table_block(off_t location);
 
     template<typename NodeT>
     void init_node(off_t location);
