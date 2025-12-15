@@ -31,12 +31,16 @@ struct NodeLRU
 class Cache
 {
 public:
-    int filefd;
+    int filefd = -1;
     int cache_miss_counter = 0;
     int cache_hit_counter = 0;
 
     Cache();
-    ~Cache();
+
+    Cache(const Cache&) = delete;
+    Cache& operator=(const Cache&) = delete;
+    Cache(Cache&&) = delete;
+    Cache& operator=(Cache&&) = delete;
 
     Page* read_block(off_t block_off);
     int write_block(off_t block_off);

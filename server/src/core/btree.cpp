@@ -21,7 +21,7 @@ BtreePlus<NodeT, LeafNodeT, InternalNodeT>::BtreePlus()
        
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
-InsertResult BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_string, Record &record, off_t &record_location)
+void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string insert_string, off_t &record_location)
 {
     //stirng to c_str
     char buffer[KeyLen] = {0};
@@ -39,10 +39,7 @@ InsertResult BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string inse
         cursor = file->load_node<NodeT>(get_next_node_pointer(to_insert,cursor_cast));
     }
 
-    if (leaf_contains(cursor, insert_string) && record_location == 0) { return Failed; }
 
-    if(record_location == 0)
-        record_location = file->write_record(record);
 
     //insert into current node
     Insert_Up_Data data = {};
@@ -60,7 +57,6 @@ InsertResult BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert(std::string inse
         split_leaf(cursor);
     }
 
-    return Success;
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_string)
@@ -175,6 +171,27 @@ std::vector<off_t> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search(std::strin
     //print_tree();
 
     return output; // key not found
+}
+
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::has_key(const std::string &key)
+{
+    char buffer[KeyLen] = {0};
+    std::memcpy(buffer, key.c_str(), key.length());
+    char to_insert[KeyLen] = {0};
+    std::memcpy(to_insert, buffer, KeyLen);
+   
+    NodeT* cursor = root_node;
+   
+    while(!cursor->is_leaf)
+    {
+        InternalNodeT *cursor_cast = static_cast<InternalNodeT*>(cursor);
+        cursor = file->load_node<NodeT>(get_next_node_pointer(to_insert,cursor_cast));
+    }
+
+    if (leaf_contains(cursor, key)) { return true; }
+
+    return false;
 }
 
 

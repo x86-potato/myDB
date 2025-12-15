@@ -45,11 +45,6 @@ using LeafNode4 = LeafNode<4, MaxKeys_4>;
 
 
 
-enum InsertResult
-{
-    Success,
-    Failed
-};
 
 
 class File;
@@ -88,17 +83,23 @@ public:
     BtreePlus(File *file);
     
     //@brief insertes string a and corresponding value b
-    InsertResult insert(std::string insert_string, Record &record, off_t &record_location);
+    void insert(std::string insert_string, off_t &record_location);
 
     //@brief deletes a key and its value
     void delete_key(std::string delete_string);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string);
+    
+    //@brief checks if the tree contains a certian key
+    bool has_key(const std::string &key);
+
     //@brief prints current objects tree, assumes roo_node is defined and loaded 
     void print_tree();
+
     //@brief creates the first node and loads it to the cache.
     void init_root(off_t &location);
+
     //@brief returns LeafNode Type of the furthest left node
     LeafNodeT* find_leftmost_leaf();
 private:

@@ -41,15 +41,50 @@ void Executor::execute (const std::string &input)
             break;
             
         case AST::QueryType::CreateIndex:
-            //execute_create_index(
-            //    static_cast<AST::CreateIndexQuery*>(queryAST.get())
-            //);
+            execute_create_index(
+                static_cast<AST::CreateIndexQuery*>(queryAST.get())
+            );
             break;
             
     }
 }
 
+void Executor::execute_create_index(AST::CreateIndexQuery* query) {
+    if (validateCreateIndexQuery(*query, database) == false)
+    {
+        return;
+    }
 
+    Table &table= database.tableMap.at(query->tableName);
+
+    int columnIndex = -1;
+    for (size_t i = 0; i < table.columns.size(); ++i)
+    {
+        if (table.columns[i].name == query->column)
+        {
+            columnIndex = i;
+            break;
+        }
+    }
+    //should not happen due to prior validation
+    if (columnIndex == -1)
+    {
+        std::cout << "Column " << query->column << " not found in table " << query->tableName << std::endl;
+        return;
+    }
+
+    std::cout << "Generating index for column " << query->column << " in table " << query->tableName << std::endl;
+    
+
+    database.file->generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(
+        columnIndex,
+        table,
+        database.index_tree32,
+        database.index_tree16,
+        database.index_tree8,
+        database.index_tree4
+    );
+}
 
 void Executor::execute_select(AST::FindQuery* query) {
     //auto results = database.find(query->key, query->index_column);
@@ -91,6 +126,8 @@ void Executor::execute_insert(AST::InsertQuery* query) {
         values.push_back(arg.value);
     }
 
-    database.insert(query->tableName, values);
+    std::string tableName = query->tableName;
+
+    database.insert(tableName, values);
 
 }

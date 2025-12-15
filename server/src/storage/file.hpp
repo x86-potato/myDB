@@ -59,28 +59,28 @@ public:
 
 
     File();
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+    File(File&&) = delete;
+    File& operator=(File&&) = delete;
 
-    template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-    void insert_data(std::string key, Record &record, MyBtree index_tree);
 
     template <typename MyBtree>
-    off_t insert_primary_index(std::string key,Record &record, MyBtree &tree);
+    off_t insert_primary_index(std::string key,Record &record, MyBtree &tree, Table &table);
 
     template <typename MyBtree>
-    void insert_secondary_index(std::string key,Record &record, MyBtree &tree,
-     off_t root, off_t record_location, int index);
+    void insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int index);
 
     template <typename PrimaryTree>
     void parse_primary_tree(PrimaryTree &tree);
 
     template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-    void generate_index(int columnIndex, 
+    void generate_index(int columnIndex, Table& table,
      MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
     std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location);
 
-    void update_root_pointer(int index, off_t value);
 
     off_t alloc_block();
 
@@ -96,8 +96,10 @@ public:
     template<typename BtreeT>
     void print_leaves(off_t disk_node_offset);
 
+    off_t update_table_index_location(Table &table, int column_index, off_t new_index_value);
+
     template <typename Node32,typename Node16, typename Node8, typename Node4>
-    off_t insert_table(Table table);
+    off_t insert_table(Table &table);
     std::vector<Table> load_table();
 
     off_t write_record(Record &record);

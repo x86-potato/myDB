@@ -1,5 +1,24 @@
 CC = g++
-CFLAGS = -g -std=c++17
+
+# language standard (always on)
+STD = -std=c++17
+
+
+BASE_FLAGS = $(STD) -Wall -Wextra
+
+RELEASE_FLAGS = -O2
+
+DEBUG_FLAGS = -g -O1 \
+	-fsanitize=address,undefined \
+	-fno-omit-frame-pointer \
+	-D_GLIBCXX_DEBUG
+
+# select flags based on DEBUG
+ifeq ($(DEBUG),1)
+	CFLAGS = $(BASE_FLAGS) $(DEBUG_FLAGS)
+else
+	CFLAGS = $(BASE_FLAGS) $(RELEASE_FLAGS)
+endif
 
 SRC_DIR = src
 OBJ_DEST_DIR = obj
@@ -32,6 +51,7 @@ clean:
 run: $(EXEC)
 	./$(EXEC)
 
-.PHONY: all clean run test
 test: clean $(EXEC)
 	./$(EXEC)
+
+.PHONY: all clean run test

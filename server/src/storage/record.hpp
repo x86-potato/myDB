@@ -21,8 +21,8 @@ public:
     std::string get_token(int index);
 
 
-    Record(const StringVec &tokens, const Table &table, int offset);
+    Record(const StringVec &tokens, const Table &table);
 
-    Record(const std::byte* read_from, Table &table);
+    Record(const std::byte* read_from, const Table &table);
     
 };

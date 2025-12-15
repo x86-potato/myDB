@@ -70,56 +70,49 @@ Table::Table()
 
 Table::Table(std::byte* data, int len)
 {
-    std::string buffer;
-    bool table_name_picked = false;
-    bool name_picked = false;
-    bool type_picked = false;
+    const std::byte delimiter = static_cast<std::byte>(0x1F);
+    const std::byte table_end = static_cast<std::byte>(0x1E);
 
+    std::string buffer;
     Column new_column;
+    enum State { TABLE_NAME, COL_NAME, COL_TYPE, COL_INDEX } state = TABLE_NAME;
 
     for (int i = 0; i < len; i++) {
-        char input_char = static_cast<char>(data[i]);
+        std::byte b = data[i];
 
-        if (input_char == ' ') {
-            if (!table_name_picked) {
-                name = buffer;
-                table_name_picked = true;
-            } else if (!name_picked) {
-                new_column.name = buffer;
-                name_picked = true;
-            } else if (!type_picked && name_picked){
-                uint8_t type_val = static_cast<uint8_t>(buffer[0]);
-                new_column.type = static_cast<Type>(type_val);
-                //new_column.indexLocation = static_cast<off_t>(buffer[])
-                type_picked = true;
-
-            }
-            else if (type_picked && name_picked && table_name_picked)
-            {
-                char* locatingPointer = &buffer[0];
-                new_column.indexLocation = *(reinterpret_cast<off_t*>(locatingPointer));
-
-
-
-                name_picked = false;
-                type_picked = false;
-
-                columns.push_back(new_column);
-                new_column = Column();
+        if (b == delimiter || b == table_end) {
+            switch (state) {
+                case TABLE_NAME:
+                    name = buffer;
+                    state = COL_NAME;
+                    break;
+                case COL_NAME:
+                    new_column.name = buffer;
+                    state = COL_TYPE;
+                    break;
+                case COL_TYPE:
+                    new_column.type = static_cast<Type>(buffer[0]);
+                    state = COL_INDEX;
+                    break;
+                case COL_INDEX:
+                    if (!buffer.empty()) {
+                        new_column.indexLocation = *reinterpret_cast<off_t*>(&buffer[0]);
+                    }
+                    columns.push_back(new_column);
+                    new_column = Column();
+                    state = COL_NAME;
+                    break;
             }
             buffer.clear();
-        } else if (input_char == ';') {
-            if (name_picked && !buffer.empty()) {
-                uint8_t type_val = static_cast<uint8_t>(buffer[0]);
-                new_column.type = static_cast<Type>(type_val);
-                columns.push_back(new_column);
-            }
-            break;
+
+            if (b == table_end)
+                break;
         } else {
-            buffer += input_char;
+            buffer += static_cast<char>(b);
         }
     }
 }
+
 
 void Table::table_print()
 {
@@ -149,35 +142,36 @@ int Table::primaryLen()
 
 
 
-// ----------------------- cast_to_bytes -----------------------
 std::vector<std::byte> cast_to_bytes(Table *table)
 {
     std::vector<std::byte> output;
+    const std::byte delimiter = static_cast<std::byte>(0x1F);
+    const std::byte table_end = static_cast<std::byte>(0x1E);
 
     // push table name
     for (auto &c : table->name)
         output.push_back(static_cast<std::byte>(c));
-    output.push_back(static_cast<std::byte>(' '));
+    output.push_back(delimiter);
 
     // push columns
     for (auto &col : table->columns) {
+        // column name
         for (auto &c : col.name)
             output.push_back(static_cast<std::byte>(c));
-        output.push_back(static_cast<std::byte>(' '));
+        output.push_back(delimiter);
 
-        // push type as byte
+        // type as byte
         output.push_back(static_cast<std::byte>(col.type));
-        output.push_back(static_cast<std::byte>(' '));
+        output.push_back(delimiter);
 
+        // indexLocation (8 bytes)
         std::byte *offsetParser = reinterpret_cast<std::byte*>(&col.indexLocation);
         for (int i = 0; i < 8; i++)
-        {
             output.push_back(offsetParser[i]);
 
-        }
-        output.push_back(static_cast<std::byte>(' '));
+        output.push_back(delimiter);
     }
 
-    output.push_back(static_cast<std::byte>(';'));
+    output.push_back(table_end);
     return output;
 }

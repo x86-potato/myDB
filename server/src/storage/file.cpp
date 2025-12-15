@@ -21,7 +21,7 @@ File::File()
             file_status = status::EMPTY;
         } 
     }
-
+    
     cache.filefd = file_fd;
 
     if (file_status == EMPTY)
@@ -49,45 +49,39 @@ File::File()
     }
 }
 
-//@brief called upon 
-template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-void File::insert_data(std::string key,Record &record, MyBtree index_tree)
-{
-    //handle index insertions
-
-
-
-}
 
 template <typename MyBtree>
-off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree)
+off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree, Table &table)
 {
     
-//     using NodeT = typename MyBtree::NodeType;
-//     //NodeT *loaded_node = load_node<NodeT>(primary_table.columns[0].indexLocation); 
-//     //if(loaded_node->disk_location == 0) tree.init_root(primary_table.columns[0].indexLocation);
+    using NodeT = typename MyBtree::NodeType;
 
-//     tree.root_node = loaded_node;
-//     //tree.tree_root = primary_table.columns[0].indexLocation;
-//     InsertResult result;
+    NodeT *loaded_node = load_node<NodeT>(table.columns[0].indexLocation); 
 
-//     off_t record_location = 0;
-
-//     result = tree.insert(key, record, record_location);
+    tree.root_node = loaded_node;
+    tree.tree_root = table.columns[0].indexLocation;
 
 
+    //check if this key is in the index already
+    if (tree.has_key(key))
+    {
+        return -1;
+    }
 
-//   //  if(result == Failed) {std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; return 0; }
-
-//     //if(primary_table.columns[0].indexLocation != tree.tree_root)
-//    // {
-//    //     primary_table.columns[0].indexLocation = tree.tree_root;
-//     //    update_root_pointer(0, primary_table.columns[0].indexLocation);
-//     //}
+    off_t record_location = this->write_record(record);
+    tree.insert(key, record_location);
 
 
-//     return record_location;
-    return 0;
+
+
+    if(table.columns[0].indexLocation != tree.tree_root)
+    {
+        table.columns[0].indexLocation = tree.tree_root;
+        database->update_index_location(table, 0, table.columns[0].indexLocation);
+    }
+
+
+    return record_location;
 }
 
 template <typename PrimaryTree>
@@ -135,64 +129,58 @@ void File::parse_primary_tree(PrimaryTree &tree)
 
 
 template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-void File::generate_index(int columnIndex, 
+void File::generate_index(int columnIndex, Table &table, 
     MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4)
 {
-    // primary_table.columns[columnIndex].indexLocation = alloc_block();
-    // update_root_pointer(columnIndex, primary_table.columns[columnIndex].indexLocation);
+    table.columns[columnIndex].indexLocation = alloc_block();
+    update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
 
-    // //pick whcih tree to create
-    // switch (primary_table.columns[columnIndex].type)
-    // {
-    //     case Type::INTEGER:{
-    //         init_node<typename MyBtree4::NodeType>(primary_table.columns[columnIndex].indexLocation);
-    //         break;
-    //     } 
-    //     case Type::CHAR32:{
-    //         init_node<typename MyBtree32::NodeType>(primary_table.columns[columnIndex].indexLocation);
-    //         break;
-    //     }
-    //     case Type::CHAR16:{
-    //         init_node<typename MyBtree16::NodeType>(primary_table.columns[columnIndex].indexLocation);
-    //         break;
-    //     }
-    //     case Type::CHAR8:{
-    //         init_node<typename MyBtree8::NodeType>(primary_table.columns[columnIndex].indexLocation);
-    //         break;
-    //     }
-    // }
+    std::cout << "Generating index at location: " << table.columns[columnIndex].indexLocation << std::endl;
+
+    //pick whcih tree to create
+    switch (table.columns[columnIndex].type)
+    {
+        case Type::INTEGER:{
+            init_node<typename MyBtree4::NodeType>(table.columns[columnIndex].indexLocation);
+            break;
+        } 
+        case Type::CHAR32:{
+            init_node<typename MyBtree32::NodeType>(table.columns[columnIndex].indexLocation);
+            break;
+        }
+        case Type::CHAR16:{
+            init_node<typename MyBtree16::NodeType>(table.columns[columnIndex].indexLocation);
+            break;
+        }
+        case Type::CHAR8:{
+            init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation);
+            break;
+        }
+    }
 
 
 
 }
 
 template <typename MyBtree>
-void File::insert_secondary_index(std::string key,Record &record, MyBtree &tree,
-     off_t root, off_t record_location, int index)
+void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index)
 {
     using NodeT = typename MyBtree::NodeType;
+    off_t root = table.columns[column_index].indexLocation;
     NodeT *loaded_node = load_node<NodeT>(root); 
-    if(loaded_node->disk_location == 0) tree.init_root(root);
+    //if(loaded_node->disk_location == 0) tree.init_root(root);
 
     tree.root_node = loaded_node;
     tree.tree_root = root;
-    InsertResult result;
-
-
-    result = tree.insert(key, record, record_location);
+    tree.insert(key,record_location);
 
 
 
-    if(result == Failed) 
-    {
-        std::cout << "\nInsertion of " << key << " failed, duplicate key\n"; 
-        return;
-    }
 
     if(root != tree.tree_root)
     {
-        root = tree.tree_root;
-        update_root_pointer(index, root);
+        table.columns[column_index].indexLocation = tree.tree_root;
+        database->update_index_location(table, column_index, table.columns[column_index].indexLocation);
     }
 }
 
@@ -210,17 +198,6 @@ std::vector<Record> File::find(std::string key, MyBtree &index_tree, off_t root_
     return output;
 }
 
-void File::update_root_pointer(int index, off_t value)    
-{
-    Page* page = cache.read_block(table_block_pointer); // Use the correct header pointer!
-
-    //primary_table.columns[index].indexLocation = value;
-
-    //std::vector<std::byte> casted = cast_to_bytes(&primary_table);
-
-    //cache.write_to_page(page, 0, casted.data(), casted.size(), table_block_pointer);
-
-}
 
 off_t File::alloc_block()
 {
@@ -265,7 +242,7 @@ template<typename NodeT>
 NodeT* File::load_node(off_t disk_offset) {
     Page* page = cache.read_block(disk_offset);
 
-    NodeT* node = reinterpret_cast<NodeT*>(page);
+    NodeT* node = reinterpret_cast<NodeT*>(page->buffer);
 
     return node;
 }
@@ -317,66 +294,127 @@ void File::print_leaves(off_t disk_node_offset)
         }
     }
 }
+/**
+ * @brief Reads a string from buffer until the given delimiter or max length
+ */
+inline std::string read_until_delim(const std::byte* buffer, int max_len, std::byte delim, int& bytesRead)
+{
+    bytesRead = 0;
+    while (bytesRead < max_len && buffer[bytesRead] != delim)
+        bytesRead++;
 
-template <typename Node32,typename Node16, typename Node8, typename Node4>
-off_t File::insert_table(Table table)
+    std::string result(reinterpret_cast<const char*>(buffer), bytesRead);
+    bytesRead++; // include delimiter
+    return result;
+}
+
+/**
+ * @brief Updates the indexLocation of a specific column in a table stored in the table block
+ */
+off_t File::update_table_index_location(Table &table, int column_index, off_t new_index_value)
+{
+    Page* page = cache.read_block(table_block_pointer);
+
+    int tableCount = 0;
+    std::memcpy(&tableCount, page->buffer, sizeof(int));
+
+    int offset = 12; // table data starts here
+
+    for (int t = 0; t < tableCount; t++)
+    {
+        int bytesRead = 0;
+        std::string tableName = read_until_delim(reinterpret_cast<std::byte*>(page->buffer + offset),
+                                                 BLOCK_SIZE - offset, std::byte{0x1F}, bytesRead);
+        offset += bytesRead;
+        if (tableName == table.name)
+        {
+            for (int col = 0; col < table.columns.size(); col++)
+            {
+                int bytesRead = 0;
+                std::string colName = read_until_delim(reinterpret_cast<std::byte*>(page->buffer + offset),
+                                                    BLOCK_SIZE - offset, std::byte{0x1F}, bytesRead);
+                offset += bytesRead;
+
+                // Skip type byte + delimiter
+                offset += 1 + 1;
+
+                if (col == column_index)
+                {
+                    cache.write_to_page(page, offset, &new_index_value, sizeof(off_t), table_block_pointer);
+                    return offset;
+                }
+
+                // Skip index (8 bytes) + delimiter
+                offset += sizeof(off_t) + 1;
+            }
+
+        }
+
+        // Skip to end-of-table marker 0x1E
+        while (offset < BLOCK_SIZE && static_cast<std::byte>(page->buffer[offset]) != std::byte{0x1E})
+            offset++;
+
+        if (offset < BLOCK_SIZE && static_cast<std::byte>(page->buffer[offset]) == std::byte{0x1E})
+            offset++;
+    }
+
+    return -1;
+}
+
+
+
+template <typename Node32, typename Node16, typename Node8, typename Node4>
+off_t File::insert_table(Table &table)
 {
     Page *page = cache.read_block(table_block_pointer);
-    int currentTableCount = 9;
+
+    int currentTableCount = 0;
     memcpy(&currentTableCount, page->buffer, 4);
 
-
+    // find write offset (append at end of used table data)
     int writeOffset = 12;
-    int read = 0;
-    while(currentTableCount > 0 && read < 4084)
+    int tablesFound = 0;
+
+    const std::byte table_end = std::byte{0x1E};
+
+    while (tablesFound < currentTableCount && writeOffset < BLOCK_SIZE)
     {
-        if(char(*(page->buffer + writeOffset)) == ';')
-        {
-            currentTableCount--;
-        }
+        if (page->buffer[writeOffset] == table_end)
+            tablesFound++;
+
         writeOffset++;
-        read++;
     }
-    //writeOffset++;
 
-
-    //init primary root
-
+    // initialize primary index root
     off_t location = alloc_block();
     table.columns[0].indexLocation = location;
+
     switch (table.columns[0].type)
     {
-        case Type::INTEGER:{
+        case Type::INTEGER:
             init_node<Node4>(location);
             break;
-        }
-        case Type::CHAR32:{
+        case Type::CHAR32:
             init_node<Node32>(location);
             break;
-        }
-        case Type::CHAR16:{
+        case Type::CHAR16:
+            init_node<Node16>(location);
+            break;
+        case Type::CHAR8:
             init_node<Node8>(location);
             break;
-        }
-        case Type::CHAR8:{
-            init_node<Node8>(location);
-            break;
-        }
     }
 
-    
+    // serialize table
     std::vector<std::byte> casted_table = cast_to_bytes(&table);
-    auto *table_data = casted_table.data();
-
-    memcpy(&currentTableCount, page->buffer, 4);
+    
     currentTableCount++;
-
-    cache.write_to_page(page, 0, &currentTableCount, 4, table_block_pointer);
-    cache.write_to_page(page, writeOffset, table_data, casted_table.size(), table_block_pointer);
-
+    cache.write_to_page(page, 0, &currentTableCount, sizeof(currentTableCount), table_block_pointer);
+    cache.write_to_page(page, writeOffset, casted_table.data(), casted_table.size(), table_block_pointer);
 
     return 0;
 }
+
 
 
 
@@ -388,29 +426,31 @@ std::vector<Table> File::load_table()
     int tableCount = 0;
     memcpy(&tableCount, page->buffer, 4);
 
-    int nextTableStart = 12; // table data starts at offset 12
+    const std::byte delimiter = static_cast<std::byte>(0x1F);
+    const std::byte table_end = static_cast<std::byte>(0x1E);
 
-    while (fetched.size() < tableCount)
+    int nextTableStart = 12; // table data starts here
+
+    for (int t = 0; t < tableCount; t++)
     {
-        int tableLength = 0;
+        int tableLen = 0;
 
-        // scan from nextTableStart
-        while (char(page->buffer[nextTableStart + tableLength]) != ';')
+        // scan until end-of-table marker (0x1E)
+        while (nextTableStart + tableLen < BLOCK_SIZE &&
+               static_cast<std::byte>(page->buffer[nextTableStart + tableLen]) != table_end)
         {
-            tableLength++;
-            assert(nextTableStart + tableLength < BLOCK_SIZE); // sanity check
+            tableLen++;
         }
 
-        // construct Table from correct start
-        Table output_table(page->buffer + nextTableStart, tableLength);
+        Table output_table(reinterpret_cast<std::byte*>(page->buffer + nextTableStart), tableLen);
         fetched.push_back(output_table);
 
-        // advance nextTableStart past table + delimiter
-        nextTableStart += tableLength + 1;
+        nextTableStart += tableLen + 1; // skip past table_end
     }
 
     return fetched;
 }
+
 
 
 
@@ -445,7 +485,7 @@ template<typename NodeT>
 void File::init_node(off_t location)
 {
     NodeT node;
-    node.disk_location = 0;
+    node.disk_location = location;
     node.is_leaf = true;
     
     File::update_node(&node, location, sizeof(NodeT));
@@ -631,28 +671,22 @@ Data_Node *File::load_data_node(off_t location)
 {
     Page* page = cache.read_block(location);
 
-    
-    Data_Node *temp_node;
-
-
-    temp_node = reinterpret_cast<Data_Node*>(page);
-
-
-
+    // Use page->buffer so we don't alias the Page object and corrupt cache internals
+    Data_Node *temp_node = reinterpret_cast<Data_Node*>(page->buffer);
 
     //todo: edge 
     return temp_node;
 }
 
-template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table);
-template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, MyBtree32&,MyBtree16&,MyBtree8&,MyBtree4&);
+template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table&);
+template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&, MyBtree32&,MyBtree16&,MyBtree8&,MyBtree4&);
 
 template Node4* File::load_node<Node4>(off_t);
 template void File::update_node<Node4>(Node4*, off_t, size_t);
 template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t);
 
-template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&);
-template void File::insert_secondary_index<MyBtree4>(std::string,Record&, MyBtree4&,off_t, off_t, int);
+template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&,Table&);
+template void File::insert_secondary_index<MyBtree4>(std::string,Table&, MyBtree4&, off_t, int);
 template void File::parse_primary_tree<MyBtree4>(MyBtree4&);
 
 
@@ -662,16 +696,16 @@ template Node8* File::load_node<Node8>(off_t);
 template void File::update_node<Node8>(Node8*, off_t, size_t);
 template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t);
 
-template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&);
-template void File::insert_secondary_index<MyBtree8>(std::string,Record&, MyBtree8&,off_t, off_t, int);
+template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&,Table&);
+template void File::insert_secondary_index<MyBtree8>(std::string,Table&, MyBtree8&, off_t, int);
 template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
 
 template Node16* File::load_node<Node16>(off_t);
 template void File::update_node<Node16>(Node16*, off_t, size_t);
 template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t);
 
-template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&);
-template void File::insert_secondary_index<MyBtree16>(std::string,Record&, MyBtree16&,off_t, off_t, int);
+template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&,Table&);
+template void File::insert_secondary_index<MyBtree16>(std::string,Table&, MyBtree16&, off_t, int);
 template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
 
 
@@ -679,14 +713,11 @@ template Node32* File::load_node<Node32>(off_t);
 template void File::update_node<Node32>(Node32*, off_t, size_t);
 template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t);
 
-template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&);
-template void File::insert_secondary_index<MyBtree32>(std::string,Record&, MyBtree32&,off_t, off_t, int);
+template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&,Table&);
+template void File::insert_secondary_index<MyBtree32>(std::string,Table&, MyBtree32&, off_t, int);
 template void File::parse_primary_tree<MyBtree32>(MyBtree32&);
 
-template void File::insert_data<MyBtree32, Node32, LeafNode32, InternalNode32>(std::string, Record&, MyBtree32);
-template void File::insert_data<MyBtree16, Node16, LeafNode16, InternalNode16>(std::string, Record&, MyBtree16);
-template void File::insert_data<MyBtree8, Node8, LeafNode8, InternalNode8>(std::string, Record&, MyBtree8);
-template void File::insert_data<MyBtree4, Node4, LeafNode4, InternalNode4>(std::string, Record&, MyBtree4);
+
 
 template std::vector<Record> File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32&, off_t);
 template std::vector<Record> File::find<MyBtree16, Node16, InternalNode16,LeafNode16>(std::string, MyBtree16&, off_t);

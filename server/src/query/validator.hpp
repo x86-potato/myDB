@@ -10,6 +10,7 @@
 
 class Database;
 
+bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database &db);
 bool validateInsertQuery(const AST::InsertQuery &query, const Database &db);
 bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database &db);
 

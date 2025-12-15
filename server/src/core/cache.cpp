@@ -4,17 +4,13 @@
 
 Cache::Cache(){
     cache_start = pre_allocate(CACHE_PAGE_LIMIT * BLOCK_SIZE);
+    //cache_start = static_cast<std::byte*>(malloc (CACHE_PAGE_LIMIT * BLOCK_SIZE));
     lru.cache = this;
     page_table.reserve(CACHE_PAGE_LIMIT);
     lru.page_to_node.reserve(CACHE_PAGE_LIMIT);
     std::cout << "\nprealloc done\n:";
 }
 
-Cache::~Cache()
-{
-    munmap(cache_start, CACHE_PAGE_LIMIT * BLOCK_SIZE);
-    cache_start = nullptr;
-}
 
 int Cache::write_block(off_t block_off)
 {

@@ -19,6 +19,7 @@ namespace AST
     struct Query
     {
         QueryType type;
+        virtual ~Query() = default;
     };
 
 
@@ -30,7 +31,8 @@ namespace AST
         LT,
         GT,
         LTE,
-        GTE
+        GTE,
+        ERROR
     };
 
     using string = std::string;
@@ -150,6 +152,7 @@ namespace AST
             case TokenType::GREATER_THAN:          return Op::GT;
             case TokenType::EQUAL_OR_LESS_THAN:    return Op::LTE;
             case TokenType::EQUAL_OR_GREATER_THAN: return Op::GTE;
+            default:                               return Op::ERROR;
         }
 
         return Op::NEQ;

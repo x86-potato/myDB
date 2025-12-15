@@ -8,12 +8,15 @@ Iterator::Iterator() : tokenList(nullptr), index(0) {}
 
 Token* Iterator::peeknext()
 {
+    if (!tokenList) return nullptr;
+    if (index + 1 >= tokenList->size()) return nullptr;
     return &(*tokenList)[index+1];
 }
 
 Token* Iterator::getNext()
 {
-    if(index + 1 < tokenList->size()) {
+    if (!tokenList || tokenList->empty()) return nullptr;
+    if (index + 1 < tokenList->size()) {
         index += 1;
     }
     return &(*tokenList)[index];
@@ -21,6 +24,7 @@ Token* Iterator::getNext()
 
 Token* Iterator::getCurr()
 {
+    if (!tokenList || tokenList->empty()) return nullptr;
     return &(*tokenList)[index];
 }
 
@@ -29,8 +33,10 @@ Parser::Parser() = default;
 
 void Parser::parserError(const char* message)
 {
+    Token* curr = iterator.getCurr();
+    const std::string name = curr ? curr->name : "<no-token>";
     std::cout << "PARSER ERROR: UNEXPECTED TOKEN "
-              << iterator.getCurr()->name << " " << message << std::endl;
+              << name << " " << message << std::endl;
 }
 
 int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
