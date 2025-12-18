@@ -14,8 +14,10 @@ enum class Type
     CHAR32, 
     CHAR16,
     CHAR8,
-    INTEGER
-    //STRING
+    INTEGER,
+    TEXT,
+    BOOL
+
 };
 
 namespace TypeUtil {

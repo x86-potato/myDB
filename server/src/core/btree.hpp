@@ -44,7 +44,12 @@ using LeafNode8 = LeafNode<8,MaxKeys_8>;
 using LeafNode4 = LeafNode<4, MaxKeys_4>;
 
 
-
+template<typename LeafNodeT>
+struct LocationData
+{
+    LeafNodeT* leaf = nullptr;
+    off_t index;
+};
 
 
 class File;
@@ -88,6 +93,9 @@ public:
     //@brief deletes a key and its value
     void delete_key(std::string delete_string);
 
+
+    LocationData<LeafNodeType> locate(std::string key);
+
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string);
     
@@ -129,7 +137,7 @@ private:
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth, std::ostream& out);
     int get_underflow_amount();
-    bool leaf_contains(NodeT* leaf, const std::string &key);
+    int leaf_contains(NodeT* leaf, const std::string &key);
     off_t search_recursive(char* search_key, InternalNodeT* node);
 };
 using MyBtree32 = BtreePlus<Node32, LeafNode32, InternalNode32>;

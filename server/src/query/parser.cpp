@@ -60,11 +60,12 @@ int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
 
     switch(iterator.getNext()->type)
     {
+        case TokenType::TEXT:
         case TokenType::CHAR_32:
         case TokenType::CHAR_16:
         case TokenType::CHAR_8:
         case TokenType::INT:
-        case TokenType::STRING:
+        case TokenType::BOOL:
             break;
         default:
             parserError("Given type does not exist");
@@ -182,7 +183,7 @@ int Parser::parseInsertArgs(AST::InsertQuery* query)
     {
         // consume literal
         Token* tok = iterator.getNext();
-        if (tok->type != TokenType::LITERAL)
+        if (tok->type != TokenType::LITERAL && tok->type != TokenType::BOOL_LITERAL)
         {
             parserError("Expected column value");
             return 1;
@@ -301,24 +302,48 @@ std::unique_ptr<AST::Expr> Parser::parse_primary()
     }
 }
 
-ParserReturn Parser::parseFind()
+ParserReturn Parser::parseSelect()
 {
-    auto query = std::make_unique<AST::FindQuery>();
-    query->type = AST::QueryType::Find;
+    auto query = std::make_unique<AST::SelectQuery>();
+    query->type = AST::QueryType::Select;
+
+    //for now only handle full projection
+
+    //expect asterisk
+    if(iterator.getNext()->type != TokenType::ASTERISK)
+    {
+        parserError("Expected a asterisk");
+        return {1, nullptr};
+    }
+
+    //expect from kw
+    if(iterator.getNext()->type != TokenType::KW_FROM)
+    {
+        parserError("Expected FROM keyword");
+        return {1, nullptr};
+    }
+
 
     // Expect table name
     Token* tableToken = iterator.getNext();
     if (tableToken->type != TokenType::IDENTIFIER) {
-        parserError("Expected table name after FIND");
+        parserError("Expected table name after SELECT");
         return {1, nullptr};
     }
     query->tableName = tableToken->name;
 
-    // Expect WHERE keyword
-    Token* whereToken = iterator.getNext();
-    if (whereToken->type != TokenType::KW_WHERE) {
-        parserError("Expected WHERE keyword");
-        return {1, nullptr};
+    // expect where or semicolon
+
+    switch (iterator.getNext()->type) {
+        case TokenType::SEMICOLON:
+            query->has_where = false;
+            return {0, std::move(query)};
+        case TokenType::KW_WHERE:
+            query->has_where = true;
+            break;
+        default:
+            parserError("Expected WHERE keyword or semicolon");
+            return {1, nullptr};
     }
 
     // Parse the conditions
@@ -341,8 +366,8 @@ ParserReturn Parser::parse(std::vector<Token> &tokenList)
             return parseCreate();
         case TokenType::KW_INSERT:
             return parseInsert();
-        case TokenType::KW_FIND:
-            return parseFind(); 
+        case TokenType::KW_SELECT:
+            return parseSelect(); 
         default:
             parserError("No such query exists");
             break;

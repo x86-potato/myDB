@@ -4,6 +4,7 @@
 #include "../config.h"
 #include "tokens.hpp"
 #include <memory>
+#include <variant>
 
 namespace AST
 {  
@@ -13,7 +14,7 @@ namespace AST
         CreateTable,
         CreateIndex,
         Insert,
-        Find
+        Select
     };
 
     struct Query
@@ -96,13 +97,15 @@ namespace AST
         string tableName;
         std::vector<InsertArg> args;
     };
-    struct FindQuery : Query
+    struct SelectQuery : Query
     {
         string tableName;
+        //to do: multi table join later
+        bool has_where = false;
         Condition condition;
     };
 
-    inline const int precedence(const Op &op)
+    inline int precedence(const Op &op)
     {
         switch(op)
         {
@@ -141,7 +144,7 @@ namespace AST
                 return false;
         }
     }
-    inline const Op token_to_op(const Token& tok)
+    inline Op token_to_op(const Token& tok)
     {
         switch(tok.type)
         {
@@ -171,5 +174,67 @@ namespace AST
             case AST::Op::GTE:  return ">=";
             default:            return "?";
         }
+    }
+
+
+
+    // Recursive helper to print an AST::Expr tree
+    inline void print_expr_tree(const Expr& expr, int indent = 0) {
+        auto print_indent = [indent]() {
+            for (int i = 0; i < indent; ++i) std::cout << "  ";
+        };
+
+        std::visit([&](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::is_same_v<T, ColumnRef>) {
+                print_indent();
+                std::cout << "Column: " << arg.name << "\n";
+
+            } else if constexpr (std::is_same_v<T, Literal>) {
+                print_indent();
+                std::cout << "Literal: \"" << arg.value << "\"\n";
+
+            } else if constexpr (std::is_same_v<T, std::unique_ptr<LogicalExpr>>) {
+                if (!arg) {
+                    print_indent();
+                    std::cout << "[Empty LogicalExpr]\n";
+                    return;
+                }
+                print_indent();
+                std::cout << "LogicalExpr: " << op_to_string(arg->op) << "\n";
+
+                if (arg->left) {
+                    print_expr_tree(*arg->left, indent + 1);
+                } else {
+                    print_indent();
+                    std::cout << "  [Left nullptr]\n";
+                }
+
+                if (arg->right) {
+                    print_expr_tree(*arg->right, indent + 1);
+                } else {
+                    print_indent();
+                    std::cout << "  [Right nullptr]\n";
+                }
+
+            } else if constexpr (std::is_same_v<T, exprError>) {
+                print_indent();
+                std::cout << "[Error Expr]\n";
+            }
+        }, expr);
+    }
+
+    // Print the full SelectQuery tree
+    inline void print_select_query_tree(const SelectQuery& query) {
+        std::cout << "SelectQuery on table: " << query.tableName << "\n";
+
+        if (!query.has_where || !query.condition.root) {
+            std::cout << "No WHERE clause.\n";
+            return;
+        }
+
+        std::cout << "WHERE clause AST:\n";
+        print_expr_tree(*query.condition.root, 1);
     }
 };

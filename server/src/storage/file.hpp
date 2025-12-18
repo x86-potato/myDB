@@ -75,8 +75,7 @@ public:
     void parse_primary_tree(PrimaryTree &tree);
 
     template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-    void generate_index(int columnIndex, Table& table,
-     MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4);
+    void generate_index(int columnIndex, Table& table);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
     std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location);

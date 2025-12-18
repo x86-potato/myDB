@@ -10,6 +10,8 @@
 
 #include "query/executor.hpp"
 
+#include "cli/input.hpp"
+
 #include <iostream>
 #include <cstring>
 
@@ -23,36 +25,15 @@
 
 
 
-
 int main()
 {
     Database database;
     Executor executor(database);
-    // define index trees
-    std::string line; 
-    StringVec lines;
+    CLI cli(executor);
 
-    std::cout << "db> ";
-    while (std::getline(std::cin, line)) {
-        if (line == "exit") break;
+    cli.run();          // Starts the interactive CLI loop
 
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        executor.execute(line); 
-
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-        std::cout << "\nExecution time: " << elapsed.count() << " µs\n";
-        std::cout << "db> ";
-    }
-
-
-
-
-    database.flush();
-
+    database.flush();   // Save any pending data on exit
     return 0;
 }
 

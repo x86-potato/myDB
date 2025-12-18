@@ -26,6 +26,12 @@ Record::Record(const StringVec& tokens, const Table& table)
     {
         switch (table.columns[i].type)
         {
+            case Type::BOOL:
+            {
+                bool v = (tokens[i] == "true");
+                str.push_back(v ? '1' : '0');
+                break;
+            }
             case Type::INTEGER:
             {
                 int32_t v = std::stoi(tokens[i]);
@@ -44,14 +50,16 @@ Record::Record(const StringVec& tokens, const Table& table)
                 str.append(value.data(), len);
                 break;
             }
+            case Type::TEXT:
+            {
+                //place holder, later will be replaced by file pointer
+                std::string value = strip_quotes(tokens[i]);
 
-            // case Type::TEXT:
-            // {
-            //     // 8-byte heap pointer (placeholder)
-            //     uint64_t ptr = 0;
-            //     str.append(reinterpret_cast<const char*>(&ptr), sizeof(ptr));
-            //     break;
-            // }
+                uint8_t len = static_cast<uint8_t>(value.size());
+                str.push_back(static_cast<char>(len));
+                str.append(value.data(), len);
+                break;
+            }
         }
     }
 
@@ -70,6 +78,11 @@ Record::Record(const std::byte* read_from, const Table& table)
     {
         switch (table.columns[i].type)
         {
+            case Type::BOOL:
+            {
+                str += (*p++ == '1') ? "true" : "false";
+                break;
+            }
             case Type::INTEGER:
             {
                 int32_t v;
@@ -89,16 +102,13 @@ Record::Record(const std::byte* read_from, const Table& table)
                 p += len;
                 break;
             }
-
-            // case Type::TEXT:
-            // {
-            //     uint64_t ptr;
-            //     memcpy(&ptr, p, sizeof(ptr));
-            //     p += sizeof(ptr);
-
-            //     str += "<TEXT>";
-            //     break;
-            // }
+            case Type::TEXT:
+            {
+                uint8_t len = static_cast<uint8_t>(*p++);
+                str.append(p, p + len);
+                p += len;
+                break;
+            }
         }
 
         if (i + 1 < table.columns.size())

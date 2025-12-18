@@ -20,8 +20,11 @@ Type string_to_type(std::string &check)
     {
         return Type::CHAR8;
     }
-    else if (check == "string") {
-        //return Type::STRING;
+    else if (check == "text") {
+        return Type::TEXT;
+    }
+    else if (check == "bool") {
+        return Type::BOOL;
     }
     return Type::INTEGER;
 }
@@ -33,7 +36,8 @@ std::string type_to_string(Type &check)
         case Type::CHAR16:  return "char16";
         case Type::CHAR8:   return "char8"; 
         case Type::INTEGER: return "int";
-        //case Type::STRING:  return "string";
+        case Type::TEXT:  return "text";
+        case Type::BOOL: return "bool";
         default:            return "unknown";
     }
 }
@@ -45,8 +49,9 @@ int type_len(Type &check)
         case Type::CHAR32:  return 32;
         case Type::CHAR16:  return 16;
         case Type::CHAR8:   return 8;
-        //case Type::STRING:  return 32;
-        default:            return -1;
+        case Type::TEXT:  return 32;
+        case Type::BOOL: return 1;
+        default:            return 0;
     }
 
     return 0;
@@ -126,6 +131,8 @@ int Table::primaryLen()
 {
     switch (columns[0].type)
     {
+        case (Type::BOOL):
+            return 1;
         case (Type::INTEGER):
             return 4;
         case (Type::CHAR32):
@@ -134,7 +141,8 @@ int Table::primaryLen()
             return 16;
         case (Type::CHAR8):
             return 8;
-        
+        case (Type::TEXT):
+            return 0; 
         
     }
     return 0;

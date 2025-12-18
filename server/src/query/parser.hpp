@@ -26,7 +26,7 @@ public:
     Token* getCurr();
 
 private:
-    int index = 0;
+    size_t index = 0;
 };
 
 class Parser
@@ -48,7 +48,7 @@ private:
 
     ParserReturn parseCreate();
     ParserReturn parseInsert();
-    ParserReturn parseFind();
+    ParserReturn parseSelect();
 
 public:
     Parser();

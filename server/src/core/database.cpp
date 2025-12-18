@@ -60,7 +60,9 @@ int Database::insert(const std::string& tableName, const StringVec& args)
             key = args[0]; 
             insertion_result = file->insert_primary_index<MyBtree32>(key,record, index_tree32, table);
             break;
-
+        default:
+            std::cout << "Error: Column type not recognized";
+            return 1;
         
     }
 
@@ -95,6 +97,9 @@ int Database::insert(const std::string& tableName, const StringVec& args)
                     file->insert_secondary_index<MyBtree32>(secondary_key, table, 
                         index_tree32, insertion_result, column_index);
                     break;
+                default:
+                    std::cout << "Error: Column type not recognized";
+                    return 1;
             }
         }
         column_index++;
@@ -103,6 +108,15 @@ int Database::insert(const std::string& tableName, const StringVec& args)
 
     return 0;
 }
+
+int Database::select(const std::string& tableName, const StringVec& args)
+{
+    Table &table = tableMap.at(tableName);
+
+}
+
+
+
 
 void Database::update_index_location(Table &table, int column_index, off_t new_index_location)
 {

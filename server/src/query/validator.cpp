@@ -87,7 +87,7 @@ bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database
     return true;
 }
 
-bool validateChar(const std::string &str, int typelen)
+bool validateChar(const std::string &str, size_t typelen)
 {
     if(str.length() < 3) return false; 
     if(str[0] != '"' || str[str.length()-1] != '"') return false;
@@ -105,15 +105,16 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
     }
     //check if enough args given
 
-    int columnCount = db.tableMap.at(query.tableName).columns.size();
+    size_t columnCount = db.tableMap.at(query.tableName).columns.size();
     if(query.args.size() != columnCount)
     {
         throwError("Values given dont match schema!");
         return false;
     }
 
-    for (int i = 0; i < columnCount; i++)
+    for (size_t i = 0; i < columnCount; i++)
     {
+        std::cout << query.args[i].value.length();
         if(query.args[i].value.length() < 1) 
         {
             
@@ -127,6 +128,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
         //switch thru the in memory table structure
         switch (db.tableMap.at(query.tableName).columns[i].type)
         {
+
             case Type::CHAR32:
             {
                 if(!validateChar(query.args[i].value, 32)) {
@@ -172,7 +174,23 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
                 }
                 break;
             };
-
+            case Type::BOOL:
+            {
+                if(query.args[i].value != "true" && query.args[i].value != "false")
+                {
+                    std::string output = std::string("column " +
+                    db.tableMap.at(query.tableName).columns[i].name + 
+                    " expects a valid boolean type");
+                    throwError(output.c_str());
+                    return false;
+                }
+                break;
+            };
+            default:
+            {
+                throwError("Invalid type");
+                return false;
+            };
         }
     }
 

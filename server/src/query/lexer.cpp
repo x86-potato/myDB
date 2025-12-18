@@ -5,11 +5,14 @@
 #include <iostream>
 
 
-
 Token Lexer::classify_token(const std::string& text)
 {
     if (text.empty())
         return {text, TokenType::IDENTIFIER};
+
+    // boolean literals
+    if (text == "true" || text == "false")
+        return {text, TokenType::BOOL_LITERAL};
 
     // numeric literal
     bool all_digits = true;
@@ -19,23 +22,21 @@ Token Lexer::classify_token(const std::string& text)
     if (all_digits)
         return {text, TokenType::LITERAL};
 
-    // string literal classification happens in tokens.hpp table
+    // keywords / operators table
     TokenType t = StringToTokenType(text);
 
-    // fallback to IDENTIFIER
     return {text, t};
 }
 
 
 
 
+
 void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenList)
 {
-    
     const char* iterator = input_line.data();
-    
     std::string temp;
-    
+
     while (*iterator != '\0')
     {
         // Skip whitespace
@@ -49,27 +50,20 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
             iterator++;
             continue;
         }
-        
-        // Check for operators with lookahead
-        if (*iterator == '=' || *iterator == '<' || 
-            *iterator == '>' || *iterator == '!')
+
+        // Check for operators with lookahead (==, <=, >=)
+        if (*iterator == '=' || *iterator == '<' || *iterator == '>' || *iterator == '!')
         {
             if (!temp.empty())
             {
-                std::string op(1, '\0');
-                op[0] = *iterator;
                 TokenList.push_back(classify_token(temp));
-                
                 temp.clear();
             }
-            
-            // Lookahead for two-character operators
+
             char next = *(iterator + 1);
-            if ((*iterator == '=' || *iterator == '<' || *iterator == '>') && next == '=')
+            if ((next == '=') && (*iterator == '<' || *iterator == '>' || *iterator == '='))
             {
-                std::string op(2, '\0');
-                op[0] = *iterator;
-                op[1] = next;
+                std::string op = { *iterator, next };
                 TokenList.push_back(classify_token(op));
                 iterator += 2;
             }
@@ -80,23 +74,25 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
             }
             continue;
         }
-        
-        // Check for single-character delimiters
-        if (*iterator == '(' || *iterator == ')' || 
-            *iterator == ',' || *iterator == ';')
+
+        // Single-character delimiters: ( ) , ; [ ] *
+        if (*iterator == '(' || *iterator == ')' ||
+            *iterator == ',' || *iterator == ';' ||
+            *iterator == '[' || *iterator == ']' ||
+            *iterator == '*')   // ← Add asterisk here
         {
             if (!temp.empty())
             {
                 TokenList.push_back(classify_token(temp));
                 temp.clear();
             }
-            
-            TokenList.push_back(classify_token(std::string(iterator, 1)));
+
+            TokenList.push_back(classify_token(std::string(1, *iterator)));
             iterator++;
             continue;
         }
-        
-        // Handle string literals, keep quotes
+
+        // Handle string literals (with quotes)
         if (*iterator == '"')
         {
             if (!temp.empty())
@@ -106,8 +102,8 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
             }
 
             std::string str_content;
-            str_content += '"';  // include opening quote
-            iterator++;          
+            str_content += '"';  // opening quote
+            iterator++;
 
             while (*iterator != '\0' && *iterator != '"')
             {
@@ -115,29 +111,30 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
                 iterator++;
             }
 
-            if (*iterator == '"') {
-                str_content += '"'; // include closing quote
-                iterator++;          // move past closing quote
+            if (*iterator == '"')
+            {
+                str_content += '"';  // closing quote
+                iterator++;
             }
-            
+
             TokenList.push_back({str_content, TokenType::LITERAL});
             continue;
         }
 
-        
-        // Regular character - accumulate
+        // Accumulate regular characters (identifiers, keywords, numbers)
         temp += *iterator;
         iterator++;
     }
-    
+
+    // Don't forget the last token
     if (!temp.empty())
     {
         TokenList.push_back(classify_token(temp));
     }
 
-    for (auto token :TokenList)
+    // Debug output
+    for (const auto& token : TokenList)
     {
         //std::cout << token.name << " " << TokenTypeToString(token.type) << std::endl;
     }
-        
 }

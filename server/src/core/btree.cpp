@@ -123,6 +123,34 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_s
    
 }
 
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate(std::string key)
+{
+    LocationData<LeafNodeT> output;
+
+    char buffer[KeyLen] = {0};
+    std::memcpy(buffer, key.c_str(), key.length());
+    char to_insert[KeyLen] = {0};
+    std::memcpy(to_insert, buffer, KeyLen);
+   
+    NodeT* cursor = root_node;
+   
+    while(!cursor->is_leaf)
+    {
+        InternalNodeT *cursor_cast = static_cast<InternalNodeT*>(cursor);
+        cursor = file->load_node<NodeT>(get_next_node_pointer(to_insert,cursor_cast));
+    }
+
+    off_t index = leaf_contains(cursor, key);
+
+    if (index == -1) return output;
+
+    output.leaf = static_cast<LeafNodeT*>(cursor);
+    output.index = index;
+
+
+    return output;
+}
 
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
@@ -140,7 +168,6 @@ std::vector<off_t> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search(std::strin
         InternalNodeT* cursor_cast = static_cast<InternalNodeT*>(cursor);
         cursor = file->load_node<NodeT>(search_recursive(search_key, cursor_cast));
     }
-    int offset = 0;
     LeafNodeT* leaf = static_cast<LeafNodeT*>(cursor); // traverse tree down to first leaf
     while (leaf)
     {
@@ -189,7 +216,7 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::has_key(const std::string &key)
         cursor = file->load_node<NodeT>(get_next_node_pointer(to_insert,cursor_cast));
     }
 
-    if (leaf_contains(cursor, key)) { return true; }
+    if (leaf_contains(cursor, key) != -1) { return true; }
 
     return false;
 }
@@ -630,7 +657,7 @@ off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search_recursive(char* search_
 
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
-bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, const std::string& key)
+int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, const std::string& key)
 {
     int left = 0;
     int right = leaf->current_key_count - 1;
@@ -641,14 +668,14 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, cons
         const std::string& mid_key = leaf->keys[mid];
 
         // Binary-safe compare
-        size_t cmp_len = std::min(key.size(), mid_key.size());
+        size_t cmp_len = std::min(key.size(), mid_key.size()); // KeyLen = fixed length of node keys
         int cmp = memcmp(key.data(), mid_key.data(), cmp_len);
 
         if (cmp == 0)
         {
             // If prefixes equal, check length for total equality
-            if (key.size() == mid_key.size())
-                return true;
+            if (key.size() == mid_key.size())// key fits in fixed-size slot
+                return mid;
 
             // Longer key sorts after shorter key
             cmp = (key.size() < mid_key.size()) ? -1 : 1;
@@ -660,8 +687,9 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, cons
             left = mid + 1;
     }
 
-    return false;
+    return -1; // not found
 }
+
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::find_left_node_child_index(NodeT *node)

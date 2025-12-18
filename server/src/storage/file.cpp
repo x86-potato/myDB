@@ -84,9 +84,9 @@ off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree, 
     return record_location;
 }
 
-template <typename PrimaryTree>
-void File::parse_primary_tree(PrimaryTree &tree)
-{
+// template <typename PrimaryTree>
+// void File::parse_primary_tree(PrimaryTree &tree)
+//{
     
 //     using PrimaryNodeT = typename PrimaryTree::NodeType;
 //     using PrimaryLeafNodeT = typename PrimaryTree::LeafNodeType;
@@ -124,13 +124,12 @@ void File::parse_primary_tree(PrimaryTree &tree)
 //         }
 //     }
 
-}
+// }
 
 
 
 template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-void File::generate_index(int columnIndex, Table &table, 
-    MyBtree32 &tree32, MyBtree16 &tree16, MyBtree8 &tree8, MyBtree4 &tree4)
+void File::generate_index(int columnIndex, Table &table)
 {
     table.columns[columnIndex].indexLocation = alloc_block();
     update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
@@ -156,6 +155,8 @@ void File::generate_index(int columnIndex, Table &table,
             init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation);
             break;
         }
+        default:
+            std::cout << "Type not supported for indexing" << std::endl;
     }
 
 
@@ -222,12 +223,7 @@ void File::update_node(NodeT *node, off_t node_location, size_t size)
 {
     Page* page = cache.read_block(node_location);
 
-    int write_size = 0;
-
-    
-
     cache.write_to_page(page,0,node, size, node_location);
-
 }
 template<typename LeafNodeT>
 void File::update_leafnode(LeafNodeT *node, off_t node_location)
@@ -328,7 +324,7 @@ off_t File::update_table_index_location(Table &table, int column_index, off_t ne
         offset += bytesRead;
         if (tableName == table.name)
         {
-            for (int col = 0; col < table.columns.size(); col++)
+            for (size_t col = 0; col < table.columns.size(); col++)
             {
                 int bytesRead = 0;
                 std::string colName = read_until_delim(reinterpret_cast<std::byte*>(page->buffer + offset),
@@ -338,7 +334,7 @@ off_t File::update_table_index_location(Table &table, int column_index, off_t ne
                 // Skip type byte + delimiter
                 offset += 1 + 1;
 
-                if (col == column_index)
+                if (col == static_cast<size_t>(column_index))
                 {
                     cache.write_to_page(page, offset, &new_index_value, sizeof(off_t), table_block_pointer);
                     return offset;
@@ -403,6 +399,9 @@ off_t File::insert_table(Table &table)
         case Type::CHAR8:
             init_node<Node8>(location);
             break;
+        default:
+            std::cerr << "Unsupported type\n";
+            return -1;
     }
 
     // serialize table
@@ -426,7 +425,6 @@ std::vector<Table> File::load_table()
     int tableCount = 0;
     memcpy(&tableCount, page->buffer, 4);
 
-    const std::byte delimiter = static_cast<std::byte>(0x1F);
     const std::byte table_end = static_cast<std::byte>(0x1E);
 
     int nextTableStart = 12; // table data starts here
@@ -679,7 +677,7 @@ Data_Node *File::load_data_node(off_t location)
 }
 
 template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table&);
-template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&, MyBtree32&,MyBtree16&,MyBtree8&,MyBtree4&);
+template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&);
 
 template Node4* File::load_node<Node4>(off_t);
 template void File::update_node<Node4>(Node4*, off_t, size_t);
@@ -687,7 +685,7 @@ template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t);
 
 template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&,Table&);
 template void File::insert_secondary_index<MyBtree4>(std::string,Table&, MyBtree4&, off_t, int);
-template void File::parse_primary_tree<MyBtree4>(MyBtree4&);
+//template void File::parse_primary_tree<MyBtree4>(MyBtree4&);
 
 
 
@@ -698,7 +696,7 @@ template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t);
 
 template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&,Table&);
 template void File::insert_secondary_index<MyBtree8>(std::string,Table&, MyBtree8&, off_t, int);
-template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
+//template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
 
 template Node16* File::load_node<Node16>(off_t);
 template void File::update_node<Node16>(Node16*, off_t, size_t);
@@ -706,7 +704,7 @@ template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t);
 
 template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&,Table&);
 template void File::insert_secondary_index<MyBtree16>(std::string,Table&, MyBtree16&, off_t, int);
-template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
+//template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
 
 
 template Node32* File::load_node<Node32>(off_t);
@@ -715,7 +713,7 @@ template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t);
 
 template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&,Table&);
 template void File::insert_secondary_index<MyBtree32>(std::string,Table&, MyBtree32&, off_t, int);
-template void File::parse_primary_tree<MyBtree32>(MyBtree32&);
+//template void File::parse_primary_tree<MyBtree32>(MyBtree32&);
 
 
 
