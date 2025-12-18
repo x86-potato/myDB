@@ -79,7 +79,7 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
         if (*iterator == '(' || *iterator == ')' ||
             *iterator == ',' || *iterator == ';' ||
             *iterator == '[' || *iterator == ']' ||
-            *iterator == '*')   // ← Add asterisk here
+            *iterator == '*' || *iterator == '.')   
         {
             if (!temp.empty())
             {

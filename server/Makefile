@@ -6,7 +6,7 @@ STD = -std=c++17
 
 BASE_FLAGS = $(STD) -Wall -Wextra
 
-RELEASE_FLAGS = -O2
+RELEASE_FLAGS = -g -O0
 
 DEBUG_FLAGS = -g -O1 \
 	-fsanitize=address,undefined \

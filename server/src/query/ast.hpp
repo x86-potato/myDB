@@ -52,7 +52,8 @@ namespace AST
 
     struct ColumnRef 
     { 
-        std::string name;
+        std::string table;
+        std::string column;
     };                                   
 
     struct Literal   
@@ -189,7 +190,7 @@ namespace AST
 
             if constexpr (std::is_same_v<T, ColumnRef>) {
                 print_indent();
-                std::cout << "Column: " << arg.name << "\n";
+                std::cout << "Column: " << arg.column << "\n";
 
             } else if constexpr (std::is_same_v<T, Literal>) {
                 print_indent();

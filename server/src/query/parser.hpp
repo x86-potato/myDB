@@ -43,8 +43,8 @@ private:
 
     int parseInsertArgs(AST::InsertQuery *query);
 
-    std::unique_ptr<AST::Expr> parse_primary();
-    std::unique_ptr<AST::Expr> parse_expr(int min_prec);
+    std::unique_ptr<AST::Expr> parse_primary(const std::string& table_name);
+    std::unique_ptr<AST::Expr> parse_expr(int min_prec,const std::string& table_name);
 
     ParserReturn parseCreate();
     ParserReturn parseInsert();

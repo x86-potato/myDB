@@ -73,6 +73,7 @@ enum class TokenType
     CLOSING_PARENTHESIS,
     QUOTE,
     SEMICOLON,
+    PERIOD, 
     COMMA,
     SET
 };
@@ -140,6 +141,7 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::QUOTE:                  return "QUOTE";
         case TokenType::SEMICOLON:              return "SEMICOLON";
         case TokenType::COMMA:                  return "COMMA";
+        case TokenType::PERIOD:                 return "PERIOD";
         case TokenType::SET:                    return "SET";
     }
     return "UNKNOWN";
@@ -183,6 +185,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"\"",      TokenType::QUOTE},
         {";",       TokenType::SEMICOLON},
         {",",       TokenType::COMMA},
+        {".",       TokenType::PERIOD},
         {"=",       TokenType::SET},
 
         {"<",       TokenType::LESS_THAN},

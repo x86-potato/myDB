@@ -251,45 +251,99 @@ ParserReturn Parser::parseInsert()
 
     return {output, std::move(query)};
 }
-std::unique_ptr<AST::Expr> Parser::parse_expr(int min_prec) {
-    auto left = parse_primary(); // always consume the left-most atomic expression
+void normalizeComparison(std::unique_ptr<AST::LogicalExpr>& logical) {
+    if (!logical->left || !logical->right) return;
+
+    const AST::Expr& leftExpr  = *logical->left;
+    const AST::Expr& rightExpr = *logical->right;
+
+    bool leftIsLiteral  = std::holds_alternative<AST::Literal>(leftExpr);
+    bool rightIsColumn  = std::holds_alternative<AST::ColumnRef>(rightExpr);
+
+    // Only normalize when it's literal <op> column
+    if (leftIsLiteral && rightIsColumn) {
+        // Swap left and right
+        std::swap(logical->left, logical->right);
+
+        // Flip the operator
+        using namespace AST;
+        switch (logical->op) {
+            case Op::LT:  logical->op = Op::GT;  break;
+            case Op::GT:  logical->op = Op::LT;  break;
+            case Op::LTE: logical->op = Op::GTE; break;
+            case Op::GTE: logical->op = Op::LTE; break;
+            // EQ and NEQ stay the same
+            default: break;
+        }
+    }
+    // If already column <op> literal → do nothing (already good)
+}
+std::unique_ptr<AST::Expr> Parser::parse_expr(int min_prec,
+const std::string &table_name) {
+    auto left = parse_primary(table_name);
 
     while (true) {
-        Token* token = iterator.peeknext(); // lookahead without consuming
-        if (!token || token->type == TokenType::SEMICOLON) break;
+        Token* token = iterator.peeknext();
+        if (!token) break;
+        if (token->type == TokenType::SEMICOLON) break;
         if (token->type == TokenType::CLOSING_PARENTHESIS) break;
-        if (!AST::is_operator(token)) break; // stop if next token is not an operator
+        if (!AST::is_operator(token)) break;
 
         AST::Op op = AST::token_to_op(*token);
         int prec = AST::precedence(op);
         if (prec < min_prec) break;
 
-        iterator.getNext(); // now consume operator
-        auto right = parse_expr(prec + 1);
+        iterator.getNext(); // consume the operator
 
+        auto right = parse_expr(prec + 1, table_name);
+
+        // Build the LogicalExpr
         auto logical = std::make_unique<AST::LogicalExpr>();
         logical->op = op;
         logical->left = std::move(left);
         logical->right = std::move(right);
 
+        // === NORMALIZE only comparisons (not AND/OR) ===
+        if (op != AST::Op::AND && op != AST::Op::OR) {
+            normalizeComparison(logical);
+        }
+
+        // Wrap it back into Expr variant
         left = std::make_unique<AST::Expr>(std::move(logical));
     }
 
     return left;
 }
 
-std::unique_ptr<AST::Expr> Parser::parse_primary() 
+std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name) 
 {
     auto tok = iterator.getNext();
     switch(tok->type) {
         case TokenType::IDENTIFIER:
-            return std::make_unique<AST::Expr>(AST::Expr{AST::ColumnRef{tok->name}});
+            //check if dot follows
+            if (iterator.peeknext()->type == TokenType::PERIOD)
+            {
+                //save current iterator
+                std::string lexed_table_name = tok->name; 
+                auto dot = iterator.getNext();
+                auto id = iterator.getNext();
+                if (id->type == TokenType::IDENTIFIER)
+                {
+                    return std::make_unique<AST::Expr>
+                    (AST::Expr{AST::ColumnRef{lexed_table_name,id->name}});
+                }
+                parserError("Expected column after .");
+            }
+            //even if no table defined, use the table specifed
+            return std::make_unique<AST::Expr>
+            (AST::Expr{AST::ColumnRef{table_name, tok->name}});
 
         case TokenType::LITERAL:
-            return std::make_unique<AST::Expr>(AST::Expr{AST::Literal{tok->name}});
+            return std::make_unique<AST::Expr>
+            (AST::Expr{AST::Literal{tok->name}});
 
         case TokenType::OPENING_PARENTHESIS: {
-            auto expr = parse_expr(0);            // parse inside parentheses
+            auto expr = parse_expr(0,table_name);            // parse inside parentheses
             Token* close = iterator.getNext();    // consume the ')'
             if (!close || close->type != TokenType::CLOSING_PARENTHESIS) {
                 parserError("Expected closing parenthesis");
@@ -301,7 +355,6 @@ std::unique_ptr<AST::Expr> Parser::parse_primary()
             return std::make_unique<AST::Expr>(AST::Expr{AST::exprError{}});
     }
 }
-
 ParserReturn Parser::parseSelect()
 {
     auto query = std::make_unique<AST::SelectQuery>();
@@ -348,7 +401,7 @@ ParserReturn Parser::parseSelect()
 
     // Parse the conditions
     auto condition = std::make_unique<AST::Condition>();
-    condition->root = parse_expr(0); // precedence-aware parsing
+    condition->root = parse_expr(0, query->tableName); // precedence-aware parsing
 
     query->condition = std::move(*condition);
 

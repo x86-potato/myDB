@@ -1,6 +1,4 @@
 #include "validator.hpp"
-#include "../core/table.hpp"
-#include "../core/database.hpp"
 
 void throwError(const char *msg)
 {
@@ -53,6 +51,40 @@ bool validateInt(const std::string& str)
 
     return true; // exact match
 }
+
+
+int indexOfColumn(const std::string& name, const Table &table)
+{
+    for (int i = 0; i < table.columns.size(); i++)
+    {
+        if(name == table.columns[i].name)
+            return i;
+    }
+    return -1; //return -1 if not found at all
+    
+}
+//first we only 
+bool validatePlan(const Plan& plan, const Database &db, const Table& table)
+{
+    for (auto &path: plan.paths)
+    {
+        for (auto &predicate: path.predicates)
+        {
+
+            //parser promises that in a single table with a 
+            else
+            {
+                throwError("given column does not exist");
+                return false;
+            }
+
+
+        }
+    }
+
+    return true;
+}
+
 bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database &db)
 {
     // check if table name like this even exists

@@ -83,16 +83,20 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
 void Executor::execute_select(AST::SelectQuery* query) {
     //AST::print_select_query_tree(*query);
 
-
     Plan plan(*query);
+    if (validatePlan(plan, database) == false)
+    {
+       return;
+    }
+
 
     plan.debug_print_plan(plan);
     
     off_t index_location = database.tableMap.at(query->tableName).columns[0].indexLocation;
 
     //using Cursor32 = <MyBtree32>;
-    database.index_tree32.root_node = database.file->load_node<typename MyBtree32::NodeType>(index_location);
-    BPlusTreeCursor<MyBtree32> cursor(&database.index_tree32, plan.paths[0].predicates[0].right);    
+    //database.index_tree32.root_node = database.file->load_node<typename MyBtree32::NodeType>(index_location);
+    //BPlusTreeCursor<MyBtree32> cursor(&database.index_tree32, plan.paths[0].predicates[0].right);    
 
     //display_results(results);
 }
