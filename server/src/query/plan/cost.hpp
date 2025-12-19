@@ -1,3 +1,7 @@
+#include "planner.hpp"
+
+
+
 //given our paths, we will assign a cost to each predicate and then sort them
 //based on the decudced cost
 //you can think of the cost of a predicate as a filtering power
@@ -16,3 +20,5 @@
 
 //joins will be done last, always
 
+constexpr int COST_FILTER = 1;
+constexpr int COST_JOIN = 10;

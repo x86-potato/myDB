@@ -126,43 +126,6 @@ off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree, 
 
 // }
 
-
-
-template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-void File::generate_index(int columnIndex, Table &table)
-{
-    table.columns[columnIndex].indexLocation = alloc_block();
-    update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
-
-    std::cout << "Generating index at location: " << table.columns[columnIndex].indexLocation << std::endl;
-
-    //pick whcih tree to create
-    switch (table.columns[columnIndex].type)
-    {
-        case Type::INTEGER:{
-            init_node<typename MyBtree4::NodeType>(table.columns[columnIndex].indexLocation);
-            break;
-        } 
-        case Type::CHAR32:{
-            init_node<typename MyBtree32::NodeType>(table.columns[columnIndex].indexLocation);
-            break;
-        }
-        case Type::CHAR16:{
-            init_node<typename MyBtree16::NodeType>(table.columns[columnIndex].indexLocation);
-            break;
-        }
-        case Type::CHAR8:{
-            init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation);
-            break;
-        }
-        default:
-            std::cout << "Type not supported for indexing" << std::endl;
-    }
-
-
-
-}
-
 template <typename MyBtree>
 void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index)
 {
@@ -185,15 +148,104 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
     }
 }
 
+
+
+template <typename PrimaryBtree, typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>
+void File::build_secondary_index(Table& table, int columnIndex,
+                                    PrimaryBtree* primaryTree,
+                                    MyBtree32* index32,
+                                    MyBtree16* index16,
+                                    MyBtree8*  index8,
+                                    MyBtree4*  index4)
+{
+    using LeafNodeType = typename PrimaryBtree::LeafNodeType;
+
+    primaryTree->root_node = load_node<typename PrimaryBtree::NodeType>(
+        table.columns[0].indexLocation
+    );
+
+    LeafNodeType* leaf = primaryTree->find_leftmost_leaf();
+
+    while (leaf != nullptr) {
+        for (int i = 0; i < leaf->current_key_count; i++) {
+            off_t record_location = leaf->values[i];
+            Record record = get_record(record_location, table);
+
+            std::string key = record.get_token(columnIndex, table);
+            Type secondaryKeyType = table.columns[columnIndex].type;
+            off_t index_location = table.columns[columnIndex].indexLocation;
+            std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << std::endl;
+            // Dispatch to the correct secondary B+Tree
+            switch (secondaryKeyType) {
+                case Type::INTEGER:
+                    insert_secondary_index(key, table, *index4, record_location, columnIndex);
+                    break;
+                case Type::CHAR32:
+                    insert_secondary_index(key, table, *index32, record_location, columnIndex);
+                    break;
+                case Type::CHAR16:
+                    insert_secondary_index(key, table, *index16, record_location, columnIndex);
+                    break;
+                case Type::CHAR8:
+                    insert_secondary_index(key, table, *index8, record_location, columnIndex);
+                    break;
+                default:
+                    std::cerr << "Unsupported type for secondary index\n";
+                    break;
+            }
+        }
+
+
+        if (leaf->next_leaf != 0) {
+            leaf = static_cast<LeafNodeType*>(load_node<typename PrimaryBtree::NodeType>(leaf->next_leaf));
+        } else {
+            leaf = nullptr;
+        }
+    }
+}
+
+
+template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>
+void File::generate_index(int columnIndex, Table& table,
+                          MyBtree32* index32,
+                          MyBtree16* index16,
+                          MyBtree8*  index8,
+                          MyBtree4*  index4)
+{
+    table.columns[columnIndex].indexLocation = alloc_block();
+    update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
+
+    // Initialize secondary tree root
+    switch (table.columns[columnIndex].type) {
+        case Type::INTEGER: init_node<typename MyBtree4::NodeType>(table.columns[columnIndex].indexLocation); break;
+        case Type::CHAR32:  init_node<typename MyBtree32::NodeType>(table.columns[columnIndex].indexLocation); break;
+        case Type::CHAR16:  init_node<typename MyBtree16::NodeType>(table.columns[columnIndex].indexLocation); break;
+        case Type::CHAR8:   init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation); break;
+        default: std::cerr << "Type not supported for indexing\n"; return;
+    }
+
+    // Dispatch primary type and build secondary index on demand
+    switch (table.columns[0].type) {
+        case Type::INTEGER: build_secondary_index<MyBtree4>(table, columnIndex, index4, index32, index16, index8, index4); break;
+        case Type::CHAR32:  build_secondary_index<MyBtree32>(table, columnIndex, index32, index32, index16, index8, index4); break;
+        case Type::CHAR16:  build_secondary_index<MyBtree16>(table, columnIndex, index16, index32, index16, index8, index4); break;
+        case Type::CHAR8:   build_secondary_index<MyBtree8>(table, columnIndex, index8, index32, index16, index8, index4); break;
+    }
+}
+
+
+
+
+
 template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-std::vector<Record> File::find(std::string key, MyBtree &index_tree, off_t root_location)
+std::vector<Record> File::find(std::string key, MyBtree &index_tree, off_t root_location, Table &table)
 {
     std::vector<Record> output;
     index_tree.tree_root = root_location;
     std::vector<off_t> locations = index_tree.search(key);
 
     for (auto &location: locations)
-        output.push_back(get_record(location));
+        output.push_back(get_record(location, table));
 
 
     return output;
@@ -588,7 +640,7 @@ int File::open_file()
 
 }
 // @brief returns record located at an offset
-Record File::get_record(off_t record_location)
+Record File::get_record(off_t record_location, Table& table)
 {
     off_t page_offset = (record_location/BLOCK_SIZE) * BLOCK_SIZE;
     off_t record_offset = record_location % BLOCK_SIZE;
@@ -596,9 +648,9 @@ Record File::get_record(off_t record_location)
 
     Page *page = cache.read_block(page_offset);
 
-    Record record(page->buffer + record_offset, database->tableMap.at(0));
+    Record record(page->buffer + record_offset, table);
 
-   // std::cout << "\nFound: " << record.str;
+    std::cout << "\nFound: " << record.str;
 
     return record;
 
@@ -677,7 +729,11 @@ Data_Node *File::load_data_node(off_t location)
 }
 
 template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table&);
-template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&);
+template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&,
+                          MyBtree32*,
+                          MyBtree16*,
+                          MyBtree8*,
+                          MyBtree4*);
 
 template Node4* File::load_node<Node4>(off_t);
 template void File::update_node<Node4>(Node4*, off_t, size_t);
@@ -717,10 +773,9 @@ template void File::insert_secondary_index<MyBtree32>(std::string,Table&, MyBtre
 
 
 
-template std::vector<Record> File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32&, off_t);
-template std::vector<Record> File::find<MyBtree16, Node16, InternalNode16,LeafNode16>(std::string, MyBtree16&, off_t);
-template std::vector<Record> File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8&, off_t);
-template std::vector<Record> File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4&, off_t);
-
+template std::vector<Record> File::find<MyBtree32, Node32, InternalNode32,LeafNode32>(std::string, MyBtree32&, off_t, Table&);
+template std::vector<Record> File::find<MyBtree16, Node16, InternalNode16,LeafNode16>(std::string, MyBtree16&, off_t, Table&);
+template std::vector<Record> File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8&, off_t, Table&);
+template std::vector<Record> File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4&, off_t, Table&);
 
 

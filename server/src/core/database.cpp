@@ -20,6 +20,13 @@ Database::Database ()
 
 
 }
+
+Table& Database::get_table(const std::string& tableName)
+{
+    return tableMap.at(tableName);
+}
+
+
 int Database::insert(const std::string& tableName, const StringVec& args)
 {
 
@@ -50,15 +57,15 @@ int Database::insert(const std::string& tableName, const StringVec& args)
         }
         case Type::CHAR8:   
             key = args[0]; 
-            insertion_result = file->insert_primary_index<MyBtree8>(key,record, index_tree8, table);
+            insertion_result = file->insert_primary_index<MyBtree8>(strip_quotes(key),record, index_tree8, table);
             break;
         case Type::CHAR16:  
             key = args[0]; 
-            insertion_result = file->insert_primary_index<MyBtree16>(key,record, index_tree16, table);
+            insertion_result = file->insert_primary_index<MyBtree16>(strip_quotes(key),record, index_tree16, table);
             break;
         case Type::CHAR32:  
             key = args[0]; 
-            insertion_result = file->insert_primary_index<MyBtree32>(key,record, index_tree32, table);
+            insertion_result = file->insert_primary_index<MyBtree32>(strip_quotes(key),record, index_tree32, table);
             break;
         default:
             std::cout << "Error: Column type not recognized";
@@ -111,8 +118,9 @@ int Database::insert(const std::string& tableName, const StringVec& args)
 
 int Database::select(const std::string& tableName, const StringVec& args)
 {
-    Table &table = tableMap.at(tableName);
+    //Table &table = tableMap.at(tableName);
 
+    return 0;
 }
 
 

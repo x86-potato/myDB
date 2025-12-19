@@ -18,6 +18,8 @@ public:
 
     LocationData<LeafNodeType> location;
 
+    bool active = false;
+
     off_t max_keys;
 
     off_t _readCount = 0;
@@ -26,8 +28,10 @@ public:
     explicit BPlusTreeCursor(TreeType* tree, const std::string &key);
 
 
+
     //valid() const;            // true if not past end
+    void set(TreeType* tree, const std::string &key); // set to key
     void next();                   // move to next key
     void prev();                   // optional
-    Record current() const;        // get current record
+    off_t curr();        // get current record
 };

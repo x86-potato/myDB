@@ -47,8 +47,8 @@ using LeafNode4 = LeafNode<4, MaxKeys_4>;
 template<typename LeafNodeT>
 struct LocationData
 {
-    LeafNodeT* leaf = nullptr;
-    off_t index;
+    LeafNodeT leaf;
+    int key_index;
 };
 
 

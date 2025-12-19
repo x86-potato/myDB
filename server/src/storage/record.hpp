@@ -17,8 +17,9 @@ public:
 
     std::string str;
     int length = 0;
+    std::vector<size_t> column_lengths;
 
-    std::string get_token(int index);
+    std::string get_token(int index, const Table& table);
 
 
     Record(const StringVec &tokens, const Table &table);

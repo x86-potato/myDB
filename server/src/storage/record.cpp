@@ -18,6 +18,19 @@ std::string strip_quotes(const std::string &input)
 
 
 
+std::string Record::get_token(int index, const Table& table)
+{
+    if (index < 0 || index >= static_cast<int>(table.columns.size()))
+        throw std::out_of_range("Record::get_token: index out of range");
+
+    size_t offset = 0;
+    for (int i = 0; i < index; ++i)
+        offset += column_lengths[i];
+
+    return str.substr(offset, column_lengths[index]);
+}
+
+
 Record::Record(const StringVec& tokens, const Table& table)
 {
     str.clear();
@@ -73,47 +86,41 @@ Record::Record(const std::byte* read_from, const Table& table)
 {
     const char* p = reinterpret_cast<const char*>(read_from);
     str.clear();
+    column_lengths.clear();
 
     for (size_t i = 0; i < table.columns.size(); ++i)
     {
+        size_t col_len = 0;
         switch (table.columns[i].type)
         {
             case Type::BOOL:
-            {
                 str += (*p++ == '1') ? "true" : "false";
+                col_len = 1;
                 break;
-            }
             case Type::INTEGER:
             {
                 int32_t v;
                 memcpy(&v, p, sizeof(v));
                 p += sizeof(v);
-
-                str += std::to_string(v);
+                str.append(reinterpret_cast<const char*>(&v), sizeof(v));
+                col_len = sizeof(v);
                 break;
             }
-
             case Type::CHAR8:
             case Type::CHAR16:
             case Type::CHAR32:
-            {
-                uint8_t len = static_cast<uint8_t>(*p++);
-                str.append(p, p + len);
-                p += len;
-                break;
-            }
             case Type::TEXT:
             {
                 uint8_t len = static_cast<uint8_t>(*p++);
-                str.append(p, p + len);
+                str.append(p, len);
                 p += len;
+                col_len = len;
                 break;
             }
         }
-
-        if (i + 1 < table.columns.size())
-            str += ' ';
+        column_lengths.push_back(col_len);
     }
 
     length = str.size();
 }
+

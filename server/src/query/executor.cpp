@@ -77,8 +77,15 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     std::cout << "Generating index for column " << query->column << " in table " << query->tableName << std::endl;
     
 
-    database.file->generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(columnIndex,table);
+    database.file->generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(columnIndex, table,
+        &database.index_tree32,
+        &database.index_tree16,
+        &database.index_tree8,
+        &database.index_tree4
+    );
 }
+
+
 
 void Executor::execute_select(AST::SelectQuery* query) {
     //AST::print_select_query_tree(*query);
@@ -88,12 +95,11 @@ void Executor::execute_select(AST::SelectQuery* query) {
     {
        return;
     }
-
-
     plan.debug_print_plan(plan);
-    
-    off_t index_location = database.tableMap.at(query->tableName).columns[0].indexLocation;
 
+    PlanExecutor plan_executor(database,plan);
+
+    plan_executor.execute();
     //using Cursor32 = <MyBtree32>;
     //database.index_tree32.root_node = database.file->load_node<typename MyBtree32::NodeType>(index_location);
     //BPlusTreeCursor<MyBtree32> cursor(&database.index_tree32, plan.paths[0].predicates[0].right);    

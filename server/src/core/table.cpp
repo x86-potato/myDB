@@ -183,3 +183,35 @@ std::vector<std::byte> cast_to_bytes(Table *table)
     output.push_back(table_end);
     return output;
 }
+
+bool Table::indexed_on_column(int column_index) {
+    if (column_index < 0 || column_index >= static_cast<int>(columns.size())) {
+        return false;
+    }
+    return columns[column_index].indexLocation != -1;
+}
+
+
+bool Table::indexed_on_column(const std::string& column_name) {
+    for (const auto& col : columns) {
+        if (col.name == column_name) {
+            return col.indexLocation != -1;
+        }
+    }
+    return false;
+}
+
+Column& Table::get_column(int column_index) {
+    if (column_index < 0 || column_index >= static_cast<int>(columns.size())) {
+        throw std::out_of_range("Column index out of range");
+    }
+    return columns[column_index];
+}
+Column& Table::get_column(const std::string& column_name) {
+    for (auto& col : columns) {
+        if (col.name == column_name) {
+            return col;
+        }
+    }
+    throw std::invalid_argument("Column name not found: " + column_name);
+}

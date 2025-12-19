@@ -41,9 +41,12 @@ struct Predicate
     Operand left;
     Operand right;
 
-    bool multi_table = false;
-    bool is_join = false;
-    bool is_filter = false;
+    enum class PredicateKind {
+        LiteralSelection,  // column == literal
+        ColumnSelection,   // column == column (same table)
+        Join               // column == column (different tables)
+    } predicate_kind;
+
 
 };
 
@@ -66,4 +69,6 @@ public:
     void debug_print_predicate(const Predicate& p);
     void debug_print_path(const Path& path, size_t index);
     void debug_print_plan(const Plan& plan);
+
+    void execute();
 };

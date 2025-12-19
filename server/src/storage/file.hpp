@@ -74,11 +74,23 @@ public:
     template <typename PrimaryTree>
     void parse_primary_tree(PrimaryTree &tree);
 
+    template <typename PrimaryBtree, typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>
+    void build_secondary_index(Table& table, int columnIndex,
+                                    PrimaryBtree* primaryTree,
+                                    MyBtree32* index32,
+                                    MyBtree16* index16,
+                                    MyBtree8*  index8,
+                                    MyBtree4*  index4);
+
     template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
-    void generate_index(int columnIndex, Table& table);
+    void generate_index(int columnIndex, Table& table,
+                          MyBtree32* index32,
+                          MyBtree16* index16,
+                          MyBtree8*  index8,
+                          MyBtree4*  index4);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
-    std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location);
+    std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location, Table &table);
 
 
     off_t alloc_block();
@@ -102,7 +114,7 @@ public:
     std::vector<Table> load_table();
 
     off_t write_record(Record &record);
-    Record get_record(off_t record_location);
+    Record get_record(off_t record_location, Table& table);
 
 private:
     void header_block_creation();

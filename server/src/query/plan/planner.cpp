@@ -62,9 +62,10 @@ Predicate Plan::make_predicate(AST::Expr* expr)
     //assume parser will always put the column on left
     auto col = std::get<AST::ColumnRef>(*node.left);
 
-    
+    //case literal  
     if (auto *lit = std::get_if<AST::Literal>(&(*node.right)))
     {
+        //column == literal
         return Predicate{
             .op = node.op,
             .left = ColumnOperand{
@@ -74,15 +75,28 @@ Predicate Plan::make_predicate(AST::Expr* expr)
             .right = LiteralOperand{
                 .literal = lit->value
             },
-            .multi_table = false,
-            .is_join = false,
-            .is_filter = true
+            .predicate_kind = Predicate::PredicateKind::LiteralSelection
         };
     }
     else if (auto *col2 = std::get_if<AST::ColumnRef>(&(*node.right)))
     {
-
-        bool is_multi_table = col.table != col2->table;
+        //same table column == column
+        if (col.table == col2->table)
+        {
+            return Predicate{
+                .op = node.op,
+                .left = ColumnOperand{
+                    .table = col.table,
+                    .column = col.column
+                },
+                .right = ColumnOperand{
+                    .table = col2->table,
+                    .column = col2->column
+                },
+                .predicate_kind = Predicate::PredicateKind::ColumnSelection
+            };
+        }
+        //different table column == column
         return Predicate{
             .op = node.op,
             .left = ColumnOperand{
@@ -93,12 +107,9 @@ Predicate Plan::make_predicate(AST::Expr* expr)
                 .table = col2->table,
                 .column = col2->column
             },
-            .multi_table = is_multi_table, 
-            .is_join = is_multi_table,
-            .is_filter = !is_multi_table
+            .predicate_kind = Predicate::PredicateKind::Join
         };
     }
-    
 
 }
 void Plan::debug_print_predicate(const Predicate& p)
@@ -141,4 +152,10 @@ void Plan::debug_print_plan(const Plan& plan)
 
     for (size_t i = 0; i < plan.paths.size(); ++i)
         debug_print_path(plan.paths[i], i);
+}
+
+
+void Plan::execute()
+{
+
 }

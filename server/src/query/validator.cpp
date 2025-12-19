@@ -55,29 +55,146 @@ bool validateInt(const std::string& str)
 
 int indexOfColumn(const std::string& name, const Table &table)
 {
-    for (int i = 0; i < table.columns.size(); i++)
+    for (off_t i = 0; i < table.columns.size(); i++)
     {
         if(name == table.columns[i].name)
-            return i;
+            return int(i);
     }
     return -1; //return -1 if not found at all
     
 }
+bool checkIfTableContainsColumn(const Table& table, const std::string& columnName)
+{
+    for (const auto& col : table.columns)
+    {
+        if (col.name == columnName)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool validateLiteralSelectionPredicate(const Predicate& predicate, const Database &db)
+{
+    //case where users.id == literal
+    auto left_table = std::get<ColumnOperand>(predicate.left).table;
+    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    {
+        std::string output = std::string("Table " + left_table + " does not exist!");
+        throwError(output.c_str());
+        return false;
+    }
+    if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
+    {
+        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        throwError(output.c_str());
+        return false;
+    }
+
+    return true;
+}
+bool validateColumnSelectionPredicate(const Predicate& predicate, const Database &db)
+{
+    auto left_table = std::get<ColumnOperand>(predicate.left).table;
+    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    {
+        std::string output = std::string("Table " + left_table + " does not exist!");
+        throwError(output.c_str());
+        return false;
+    }
+    auto right_table = std::get<ColumnOperand>(predicate.right).table;
+    if (db.tableMap.find(right_table) == db.tableMap.end()) 
+    {
+        std::string output = std::string("Table " + right_table + " does not exist!");
+        throwError(output.c_str());
+        return false;
+    }   
+    if (left_table != right_table)
+    {
+        std::string output = std::string("In multi-table filter, both columns cannot be from the same table " + left_table);
+        throwError(output.c_str());
+        return false;
+    }
+    if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
+    {
+        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        throwError(output.c_str());
+        return false;
+    }
+    if (!checkIfTableContainsColumn(db.tableMap.at(right_table), std::get<ColumnOperand>(predicate.right).column))
+    {
+        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table);
+        throwError(output.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+bool validateJoinPredicate(const Predicate& predicate, const Database &db)
+{
+    auto left_table = std::get<ColumnOperand>(predicate.left).table;
+    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    {
+        std::string output = std::string("Table " + left_table + " does not exist!");
+        throwError(output.c_str());
+        return false;
+    }
+    auto right_table = std::get<ColumnOperand>(predicate.right).table;
+    if (db.tableMap.find(right_table) == db.tableMap.end()) 
+    {
+        std::string output = std::string("Table " + right_table + " does not exist!");
+        throwError(output.c_str());
+        return false;
+    }   
+
+    if (left_table == right_table)
+    {
+        std::string output = std::string("In join predicate, both columns cannot be from the same table " + left_table);
+        throwError(output.c_str());
+        return false;
+    }
+        if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
+    {
+        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        throwError(output.c_str());
+        return false;
+    }
+    if (!checkIfTableContainsColumn(db.tableMap.at(right_table), std::get<ColumnOperand>(predicate.right).column))
+    {
+        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table);
+        throwError(output.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+
+
 //first we only 
-bool validatePlan(const Plan& plan, const Database &db, const Table& table)
+bool validatePlan(const Plan& plan, const Database &db)
 {
     for (auto &path: plan.paths)
     {
         for (auto &predicate: path.predicates)
         {
-
-            //parser promises that in a single table with a 
-            else
+            switch (predicate.predicate_kind)
             {
-                throwError("given column does not exist");
-                return false;
+                case Predicate::PredicateKind::LiteralSelection:
+                    if (!validateLiteralSelectionPredicate(predicate, db))
+                        return false;
+                    break;
+                case Predicate::PredicateKind::ColumnSelection:
+                    if (!validateColumnSelectionPredicate(predicate, db))
+                        return false;
+                    break;
+                case Predicate::PredicateKind::Join:
+                    if (!validateJoinPredicate(predicate, db))
+                        return false;
+                    break;
             }
-
 
         }
     }

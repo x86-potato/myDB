@@ -142,12 +142,11 @@ LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate(std::
     }
 
     off_t index = leaf_contains(cursor, key);
+    output.key_index = index;
 
     if (index == -1) return output;
 
-    output.leaf = static_cast<LeafNodeT*>(cursor);
-    output.index = index;
-
+    output.leaf = *static_cast<LeafNodeT*>(cursor);
 
     return output;
 }

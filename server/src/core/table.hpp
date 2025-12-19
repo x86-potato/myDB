@@ -46,6 +46,12 @@ struct Table {
     int primaryLen();
 
     void table_print();
+
+    Column& get_column(int column_index);
+    Column& get_column(const std::string& column_name);
+
+    bool indexed_on_column(int column_index);
+    bool indexed_on_column(const std::string& column_name);
 };
 
 std::vector<std::byte> cast_to_bytes(Table *table);
