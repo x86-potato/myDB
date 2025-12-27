@@ -2,7 +2,7 @@
 #include <string>
 #include "../core/database.hpp"
 #include "../core/cursor.hpp"
-#include "plan/planExecutor.hpp"
+#include "plan/builder.hpp"
 #include "tokens.hpp"
 #include "ast.hpp"
 #include "lexer.hpp"

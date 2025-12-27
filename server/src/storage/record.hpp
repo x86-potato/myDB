@@ -1,6 +1,8 @@
 #pragma once
 
-#include <string>
+#include "../config.h"
+#include <vector>
+
 
 
 class Table;  
@@ -21,6 +23,7 @@ public:
 
     std::string get_token(int index, const Table& table);
 
+    Record() = default;
 
     Record(const StringVec &tokens, const Table &table);
 

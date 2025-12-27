@@ -1,59 +1,91 @@
 #include "cursor.hpp"
 
 template <typename TreeType>
-BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* type, const std::string &key)
+BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* tree)
 {
-    
+    this->tree = tree;
 
-
-    
 }
 
 
 
 template <typename TreeType>
-void BPlusTreeCursor<TreeType>::next()
+off_t BPlusTreeCursor<TreeType>::get_value() const
 {
+    return value;
+}
 
+
+template <typename TreeType>
+bool BPlusTreeCursor<TreeType>::next()
+{
+    if(!started)
+    {
+        started = true;
+        return this->set(key);
+    }
+    //go to next key in leaf //TODO:: later let it follow multiple leaves
+
+
+    if(location.key_index + 1  >= location.leaf.current_key_count)
+    {
+        return false;
+    } 
+
+
+    
+    location.key_index++;
+    value = location.leaf.values[location.key_index];
+    return true;
 }
 
 template <typename TreeType>
-void BPlusTreeCursor<TreeType>::set(TreeType* type, const std::string &key)
+bool BPlusTreeCursor<TreeType>::set(const std::string &key)
 {
     
-    //set cursor to leaf with data
-    max_keys = TreeType::MaxKeys;
 
-    tree = type;
+    tree->root_node = db->file->load_node<typename TreeType::NodeType>(tree_root);
+//may not be needed
 
     location = tree->locate(key);
     if(location.key_index == -1) 
     {
-        std::cout << "not found";
-        return;
+        std::cout << "key: " << key << " not found in cursor set\n";
+        return false;
     }
 
-    active = true;
+    value = location.leaf.values[location.key_index];
+
+    return true;
+}
 
 
-    //loop while there are still keys in this leaf, and they equal the key
-    while(location.key_index < location.leaf.current_key_count && 
-          std::memcmp(location.leaf.keys[location.key_index], key.c_str(), TreeType::KeyLen) == 0)
-    {
-        std::cout << "Found record at location: " << location.leaf.values[location.key_index] << "\n";
-        location.key_index++;
-    }
+template <typename TreeType>
+const std::string BPlusTreeCursor<TreeType>::get_key() const
+{
+    if(location.key_index < 0) return std::string();
+    return std::string(location.leaf.keys[location.key_index], TreeType::KeyLen);
 }
 
 template <typename TreeType>
-off_t BPlusTreeCursor<TreeType>::curr()
+std::string BPlusTreeCursor<TreeType>::get_key()
 {
-    if(location.key_index < location.leaf.current_key_count && active)
-    {
-        return location.leaf.values[location.key_index];
-    }
-    return -1;
+    if(location.key_index < 0) return std::string();
+    return std::string(location.leaf.keys[location.key_index], TreeType::KeyLen);
 }
+
+
+
+template <typename TreeType>
+bool BPlusTreeCursor<TreeType>::key_equals(const std::string& literal)
+{
+    unsigned char lit[TreeType::KeyLen];
+    memset(lit, 0, TreeType::KeyLen);
+    memcpy(lit, literal.data(), std::min(literal.size(), (size_t)TreeType::KeyLen));
+
+    return memcmp(get_key().data(), lit, TreeType::KeyLen) == 0;
+}
+
 
 
 template class BPlusTreeCursor<MyBtree32>;

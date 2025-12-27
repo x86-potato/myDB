@@ -37,6 +37,8 @@ int Database::insert(const std::string& tableName, const StringVec& args)
     std::string key;
     off_t insertion_result = 0;
 
+
+
     switch (table.columns[0].type)
     {
         case Type::INTEGER:
@@ -93,15 +95,15 @@ int Database::insert(const std::string& tableName, const StringVec& args)
                         index_tree4,insertion_result, column_index);
                     break;
                 case Type::CHAR8:
-                    file->insert_secondary_index<MyBtree8>(secondary_key, table, 
+                    file->insert_secondary_index<MyBtree8>(strip_quotes(secondary_key), table, 
                         index_tree8, insertion_result, column_index);
                     break;
                 case Type::CHAR16:
-                    file->insert_secondary_index<MyBtree16>(secondary_key, table, 
+                    file->insert_secondary_index<MyBtree16>(strip_quotes(secondary_key), table, 
                         index_tree16, insertion_result, column_index);
                     break;
                 case Type::CHAR32:
-                    file->insert_secondary_index<MyBtree32>(secondary_key, table, 
+                    file->insert_secondary_index<MyBtree32>(strip_quotes(secondary_key), table, 
                         index_tree32, insertion_result, column_index);
                     break;
                 default:
@@ -116,12 +118,12 @@ int Database::insert(const std::string& tableName, const StringVec& args)
     return 0;
 }
 
-int Database::select(const std::string& tableName, const StringVec& args)
-{
-    //Table &table = tableMap.at(tableName);
-
-    return 0;
-}
+//int Database::select(const std::string& tableName, const StringVec& args)
+//{
+//    //Table &table = tableMap.at(tableName);
+//
+//    return 0;
+//}
 
 
 

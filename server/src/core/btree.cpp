@@ -656,38 +656,44 @@ off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search_recursive(char* search_
 
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
-int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf, const std::string& key)
+int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_contains(NodeT* leaf,
+                                                            const std::string& key)
 {
     int left = 0;
     int right = leaf->current_key_count - 1;
+    int result = -1;
+
+    // Prepare a fixed-width search key
+    unsigned char search[KeyLen];
+    memset(search, 0, KeyLen);
+    memcpy(search, key.data(), std::min(key.size(), (size_t)KeyLen));
 
     while (left <= right)
     {
         int mid = left + (right - left) / 2;
-        const std::string& mid_key = leaf->keys[mid];
 
-        // Binary-safe compare
-        size_t cmp_len = std::min(key.size(), mid_key.size()); // KeyLen = fixed length of node keys
-        int cmp = memcmp(key.data(), mid_key.data(), cmp_len);
+        // Compare exactly KeyLen bytes
+        int cmp = memcmp(search, leaf->keys[mid], KeyLen);
 
         if (cmp == 0)
         {
-            // If prefixes equal, check length for total equality
-            if (key.size() == mid_key.size())// key fits in fixed-size slot
-                return mid;
-
-            // Longer key sorts after shorter key
-            cmp = (key.size() < mid_key.size()) ? -1 : 1;
+            result = mid;
+            right = mid - 1;   // find leftmost duplicate
         }
-
-        if (cmp < 0)
+        else if (cmp < 0)
+        {
             right = mid - 1;
+        }
         else
+        {
             left = mid + 1;
+        }
     }
 
-    return -1; // not found
+    return result;
 }
+
+
 
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>

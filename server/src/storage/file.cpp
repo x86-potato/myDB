@@ -163,6 +163,7 @@ void File::build_secondary_index(Table& table, int columnIndex,
     primaryTree->root_node = load_node<typename PrimaryBtree::NodeType>(
         table.columns[0].indexLocation
     );
+    primaryTree->tree_root = table.columns[0].indexLocation;
 
     LeafNodeType* leaf = primaryTree->find_leftmost_leaf();
 
@@ -226,10 +227,25 @@ void File::generate_index(int columnIndex, Table& table,
 
     // Dispatch primary type and build secondary index on demand
     switch (table.columns[0].type) {
-        case Type::INTEGER: build_secondary_index<MyBtree4>(table, columnIndex, index4, index32, index16, index8, index4); break;
-        case Type::CHAR32:  build_secondary_index<MyBtree32>(table, columnIndex, index32, index32, index16, index8, index4); break;
-        case Type::CHAR16:  build_secondary_index<MyBtree16>(table, columnIndex, index16, index32, index16, index8, index4); break;
-        case Type::CHAR8:   build_secondary_index<MyBtree8>(table, columnIndex, index8, index32, index16, index8, index4); break;
+        case Type::INTEGER: 
+            //index4->tree_root = table.columns[columnIndex].indexLocation;
+            build_secondary_index<MyBtree4>
+            (table, columnIndex, index4, index32, index16, index8, index4); break;
+        case Type::CHAR32:  
+            //index32->tree_root = table.columns[columnIndex].indexLocation;
+            build_secondary_index<MyBtree32>
+            (table, columnIndex, index32, index32, index16, index8, index4); break;
+        case Type::CHAR16:  
+            //index16->tree_root = table.columns[columnIndex].indexLocation;
+            build_secondary_index<MyBtree16>
+            (table, columnIndex, index16, index32, index16, index8, index4); break;
+        case Type::CHAR8:   
+            //index8->tree_root = table.columns[columnIndex].indexLocation;
+            build_secondary_index<MyBtree8>
+            (table, columnIndex, index8, index32, index16, index8, index4); break;
+        default:
+            std::cerr << "Type not supported for indexing\n";   
+            return;
     }
 }
 
@@ -650,7 +666,6 @@ Record File::get_record(off_t record_location, Table& table)
 
     Record record(page->buffer + record_offset, table);
 
-    std::cout << "\nFound: " << record.str;
 
     return record;
 
