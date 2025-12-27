@@ -151,6 +151,24 @@ LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate(std::
     return output;
 }
 
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate_start()
+{
+    LocationData<LeafNodeT> output;
+
+    NodeT* cursor = root_node;
+   
+    while(!cursor->is_leaf)
+    {
+        InternalNodeT *cursor_cast = static_cast<InternalNodeT*>(cursor);
+        cursor = file->load_node<NodeT>(cursor_cast->children[0]);
+    }
+
+    output.key_index = 0;
+    output.leaf = *static_cast<LeafNodeT*>(cursor);
+
+    return output;
+}
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 std::vector<off_t> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search(std::string search_string)

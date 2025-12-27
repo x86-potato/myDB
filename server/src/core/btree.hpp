@@ -96,6 +96,8 @@ public:
 
     LocationData<LeafNodeType> locate(std::string key);
 
+    LocationData<LeafNodeType> locate_start();
+
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string);
     

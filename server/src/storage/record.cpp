@@ -17,6 +17,45 @@ std::string strip_quotes(const std::string &input)
 }
 
 
+std::vector<std::string> Record::to_tokens(const Table& table) const {
+    std::vector<std::string> tokens;
+    size_t offset = 0;
+
+    for (size_t i = 0; i < table.columns.size(); ++i) {
+        std::string token;
+
+        switch (table.columns[i].type) {
+            case Type::BOOL:
+                token = (str[offset] == '1') ? "true" : "false";
+                break;
+
+            case Type::INTEGER:
+            {
+                int32_t v;
+                memcpy(&v, str.data() + offset, sizeof(v));
+                token = std::to_string(v);
+                break;
+            }
+
+            case Type::CHAR8:
+            case Type::CHAR16:
+            case Type::CHAR32:
+            case Type::TEXT:
+            {
+                size_t len = column_lengths[i];
+                token = str.substr(offset, len);
+                break;
+            }
+        }
+
+        tokens.push_back(token);
+        offset += column_lengths[i];
+    }
+
+    return tokens;
+}
+
+
 
 std::string Record::get_token(int index, const Table& table)
 {

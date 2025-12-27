@@ -52,7 +52,7 @@ Page* Cache::insert(off_t block_offset)
     {
         p = lru.insert(p, block_offset, page_table);
     }
-    std::cout << "fetch ";
+    //std::cout << "fetch ";
 
     if (pread(filefd, p, BLOCK_SIZE, block_offset) != BLOCK_SIZE) {
         //std::cout << "disk fetch ";

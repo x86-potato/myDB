@@ -178,6 +178,9 @@ bool validatePlan(const Plan& plan, const Database &db)
 {
     for (auto &path: plan.paths)
     {
+        
+        if(path.predicates.size() == 0)
+            return true;
         for (auto &predicate: path.predicates)
         {
             switch (predicate.predicate_kind)

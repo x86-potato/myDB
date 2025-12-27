@@ -16,6 +16,8 @@
 
 Scan::Scan(Database& database,Table &table, const Predicate *predicate) 
 : database_(database), table_(table), pred_(predicate) {
+    tables_.push_back(&table_);
+
     if (pred_ == nullptr) 
     {
         mode_ = ScanMode::FULL_SCAN;
@@ -58,8 +60,38 @@ Scan::Scan(Database& database,Table &table, const Predicate *predicate)
         cursor_->key = strip_quotes(key);
         //cursor_->set(key);
         //right now b tree cursor is set on first next call
+    }
+    else if (mode_ == ScanMode::FULL_SCAN) 
+    {
+        //get primary index location
+        off_t index_location = table.get_column(0).indexLocation;
+        switch (table.get_column(0).type)
+        {
+            case Type::CHAR32:
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database.index_tree32);
+                break;
+            case Type::CHAR16:
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database.index_tree16);
+                break;
+            case Type::CHAR8:
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database.index_tree8);
+                break;
+            case Type::INTEGER:
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database.index_tree4);
+                break;
+            default:
+                throw std::runtime_error("Unsupported data type for indexed column");
+        }
+
+        cursor_->tree_root = index_location;
+        cursor_->db = &database_;
+        cursor_->key = std::nullopt;
+        //cursor_->set(key);
+        //right now b tree cursor is set on first next call
 
     }
+
+
 } 
 
 
@@ -79,7 +111,9 @@ bool Scan::next(Output &output)
             off_t record_location = cursor_->get_value();
             output.record = database_.file->get_record(record_location, table_);
 
-            std::cout << "Scan found record: " << output.record.str<< " with key: " << cursor_->get_key() << std::endl;
+            //std::cout << "Record located at: " << record_location << "by Scanner\n";
+
+
             return true;
         }
         else
@@ -87,10 +121,18 @@ bool Scan::next(Output &output)
             return false;
         }
     }
-
     else
     {
-        std::cout << "FULL SCAN NOT IMPLEMENTED YET" << std::endl;
+        if (cursor_->next())
+        {
+            off_t record_location = cursor_->get_value();
+            output.record = database_.file->get_record(record_location, table_);
+
+
+
+            return true;
+        }
+
     }
 
 }

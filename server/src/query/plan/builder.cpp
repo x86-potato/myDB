@@ -11,19 +11,27 @@ Predicate &pick_scan_predicate(Path &path)
 
 Pipeline::Pipeline(Path &path, Database& database)
 {
-    Predicate& scan_predicate = pick_scan_predicate(path);
-
-    auto temp = std::make_unique<Scan>(database, database.get_table
-        (std::get<ColumnOperand>(scan_predicate.left).table), &scan_predicate);
-
-    root = std::move(temp);
-
-    Output output;
-
-    while (root->next(output))
+    if (path.predicates.size() == 0)
     {
-        std::cout << output.record.str << std::endl;
+        //full table scan
+        auto temp = std::make_unique<Scan>(database, database.get_table
+            (path.tables[0]), nullptr);
+
+        root =  std::move(temp);
+        return;
     }
+    else 
+    {
+        Predicate& scan_predicate = pick_scan_predicate(path);
+
+        auto temp = std::make_unique<Scan>(database, database.get_table
+            (std::get<ColumnOperand>(scan_predicate.left).table), &scan_predicate);
+
+        root = std::move(temp);
+
+    }
+
+
 }   
 
 
@@ -33,7 +41,12 @@ void Pipeline::Execute()
 
     while (root->next(output))
     {
-        std::cout << "Pipline output record: " << output.record.str << std::endl;
+
+        std::cout << "| ";
+        for (const auto& token : output.record.to_tokens(*root->tables_[0])) {
+            std::cout << token << " | ";
+        }
+        std::cout << std::endl;
     }
 
 }

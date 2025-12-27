@@ -52,6 +52,7 @@ struct Predicate
 
 struct Path
 {
+    std::vector<std::string> tables;
     std::vector<Predicate> predicates;
 };
 

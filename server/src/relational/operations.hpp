@@ -1,6 +1,8 @@
 #pragma once
 #include <memory>
+#include <optional>
 #include "../storage/record.hpp"
+
 #include "../core/table.hpp"
 #include "../core/database.hpp"
 #include "../config.h"
@@ -23,6 +25,7 @@ class Operator
 public:
     virtual ~Operator() = default;
 
+    std::vector<Table*> tables_;
     virtual bool next(Output &output) = 0;
 
 };
@@ -42,10 +45,9 @@ public:
     bool next(Output &output) override;
 
 private:
-    void init();
+    Table& table_;
 
     Database& database_;
-    Table& table_;
     const Predicate* pred_;
     ScanMode mode_;
 

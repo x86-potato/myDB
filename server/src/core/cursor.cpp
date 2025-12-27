@@ -40,17 +40,26 @@ bool BPlusTreeCursor<TreeType>::next()
 }
 
 template <typename TreeType>
-bool BPlusTreeCursor<TreeType>::set(const std::string &key)
+bool BPlusTreeCursor<TreeType>::set(const std::optional<std::string>& key)
 {
     
-
     tree->root_node = db->file->load_node<typename TreeType::NodeType>(tree_root);
-//may not be needed
 
-    location = tree->locate(key);
+    if(key.has_value())
+    {
+        this->key = *key;
+        location = tree->locate(*key);
+    }
+    else
+    {
+        location = tree->locate_start();
+    }
+
+
+
     if(location.key_index == -1) 
     {
-        std::cout << "key: " << key << " not found in cursor set\n";
+        std::cout << "key: " << key.value() << " not found in cursor set\n";
         return false;
     }
 

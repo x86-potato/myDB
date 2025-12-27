@@ -3,10 +3,17 @@
 
 Plan::Plan(const AST::SelectQuery& query)
 {
-    if (!query.has_where || !query.condition.root)
-        return;
+    //TODO: multi table join later
 
-    paths.push_back(Path{}); // start with one path
+    if (!query.has_where || !query.condition.root)
+    {
+        Path initial_path;
+        initial_path.tables.push_back(query.tableName);
+        paths.push_back(initial_path);
+        return;
+    }
+
+    paths.push_back(Path{.tables = {query.tableName}, .predicates = {},}); // start with one path
     build_paths(query.condition.root.get(), paths);
 }
 

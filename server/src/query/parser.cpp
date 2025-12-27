@@ -281,6 +281,13 @@ void normalizeComparison(std::unique_ptr<AST::LogicalExpr>& logical) {
 std::unique_ptr<AST::Expr> Parser::parse_expr(int min_prec,
 const std::string &table_name) {
     auto left = parse_primary(table_name);
+    if (!left) return nullptr;              // sanity
+
+    AST::Expr& left_expr = *left;
+    if(std::holds_alternative<AST::exprError>(left_expr))
+    {
+        return nullptr;
+    }
 
     while (true) {
         Token* token = iterator.peeknext();
@@ -402,6 +409,9 @@ ParserReturn Parser::parseSelect()
     // Parse the conditions
     auto condition = std::make_unique<AST::Condition>();
     condition->root = parse_expr(0, query->tableName); // precedence-aware parsing
+    if(condition->root == nullptr)
+        return {1, nullptr};
+
 
     query->condition = std::move(*condition);
 

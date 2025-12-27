@@ -2,6 +2,7 @@
 #include "../config.h"
 #include "btree.hpp"
 #include "../core/database.hpp"
+#include <optional>
 
 
 class TreeCursor
@@ -10,7 +11,7 @@ class TreeCursor
 public:
     off_t tree_root = 0;
     Database *db = nullptr;
-    std::string key;
+    std::optional<std::string> key;
 
     virtual bool next() = 0;
     
@@ -22,7 +23,7 @@ public:
 
     virtual std::string get_key() = 0;
 
-    virtual bool set(const std::string &key) = 0; // set to key
+    virtual bool set(const std::optional<std::string>& key) = 0; // set to key
 
     virtual bool key_equals(const std::string& literal) = 0;
 };
@@ -60,7 +61,7 @@ public:
     std::string get_key() override;
 
     bool next() override;                   // move to next key
-    bool set(const std::string &key) override; // set to key
+    bool set(const std::optional<std::string>& key) override; // set to key
 
     bool key_equals(const std::string& literal) override;
 };

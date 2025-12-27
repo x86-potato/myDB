@@ -21,6 +21,9 @@ public:
     int length = 0;
     std::vector<size_t> column_lengths;
 
+    std::vector<std::string> to_tokens(const Table& table) const;
+
+
     std::string get_token(int index, const Table& table);
 
     Record() = default;

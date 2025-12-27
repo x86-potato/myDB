@@ -98,10 +98,19 @@ void Executor::execute_select(AST::SelectQuery* query) {
     plan.debug_print_plan(plan);
 
 
+    if(plan.paths.size() == 0)
+    {
+        Path temp = Path{}; 
+        Pipeline plan_executor(temp, database);
 
-    Pipeline plan_executor(plan.paths[0], database);
+        plan_executor.Execute();
+    }
+    else
+    {
+        Pipeline plan_executor(plan.paths[0], database);
 
-    plan_executor.Execute();
+        plan_executor.Execute();
+    }
     //using Cursor32 = <MyBtree32>;
     //database.index_tree32.root_node = database.file->load_node<typename MyBtree32::NodeType>(index_location);
     //BPlusTreeCursor<MyBtree32> cursor(&database.index_tree32, plan.paths[0].predicates[0].right);    
