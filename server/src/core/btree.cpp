@@ -141,7 +141,7 @@ LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate(std::
         cursor = file->load_node<NodeT>(get_next_node_pointer(to_insert,cursor_cast));
     }
 
-    off_t index = leaf_contains(cursor, key);
+    off_t index = leaf_lower_bound(cursor, key);
     output.key_index = index;
 
     if (index == -1) return output;
@@ -670,6 +670,38 @@ off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::search_recursive(char* search_
     return node->children[i];
 }
 
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_lower_bound(NodeT* leaf, const std::string& key)
+{
+    int left = 0;
+    int right = leaf->current_key_count - 1;
+    int result = leaf->current_key_count; // default: past the end
+
+    // Prepare a fixed-width search key
+    unsigned char search[KeyLen];
+    memset(search, 0, KeyLen);
+    memcpy(search, key.data(), std::min(key.size(), (size_t)KeyLen));
+
+    while (left <= right)
+    {
+        int mid = left + (right - left) / 2;
+
+        int cmp = memcmp(search, leaf->keys[mid], KeyLen);
+
+        if (cmp <= 0)  // key ≤ leaf->keys[mid], go left
+        {
+            result = mid;
+            right = mid - 1;
+        }
+        else
+        {
+            left = mid + 1;
+        }
+    }
+
+    // result points to first key ≥ search, or current_key_count if none
+    return (result == leaf->current_key_count) ? -1 : result;
+}
 
 
 

@@ -5,63 +5,46 @@
 #include <optional>
 
 
-class TreeCursor
-{
+struct Key {
+    std::vector<std::byte> bytes;
+};
 
+class TreeCursor {
 public:
     off_t tree_root = 0;
-    Database *db = nullptr;
-    std::optional<std::string> key;
+    Database* db = nullptr;
+    std::optional<Key> key;
+    bool skip_equals = false;
 
     virtual bool next() = 0;
-    
     virtual ~TreeCursor() = default;
 
-    virtual const std::string get_key() const = 0;
-
+    virtual const Key& get_key() const = 0;
     virtual off_t get_value() const = 0;
-
-    virtual std::string get_key() = 0;
-
-    virtual bool set(const std::optional<std::string>& key) = 0; // set to key
-
-    virtual bool key_equals(const std::string& literal) = 0;
+    virtual bool set(const std::optional<Key>& key) = 0;
+    virtual bool key_equals(const Key& check) = 0;
 };
+
 
 template <typename TreeType>
 class BPlusTreeCursor : public TreeCursor
 {
-    
-
 public:
-    using NodeType = typename TreeType::NodeType;
-    using LeafNodeType = typename TreeType::LeafNodeType;
-    using InternalNodeType = typename TreeType::InternalNodeType;
-
     TreeType* tree = nullptr;
-
     off_t value;
-
-
-    LocationData<LeafNodeType> location;
-
-
+    LocationData<typename TreeType::LeafNodeType> location;
     bool started = false;
-
-    off_t max_keys;
-
-
-    off_t _readCount = 0;
 
     BPlusTreeCursor() = default;
     BPlusTreeCursor(TreeType* tree);
 
     off_t get_value() const override;
-    const std::string get_key() const override;
-    std::string get_key() override;
+    const Key& get_key() const override;
 
-    bool next() override;                   // move to next key
-    bool set(const std::optional<std::string>& key) override; // set to key
+    bool next() override;
+    bool set(const std::optional<Key>& key) override;
+    bool key_equals(const Key& check) override;
 
-    bool key_equals(const std::string& literal) override;
+private:
+    Key current_key;
 };

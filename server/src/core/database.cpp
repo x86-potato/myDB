@@ -44,15 +44,10 @@ int Database::insert(const std::string& tableName, const StringVec& args)
         case Type::INTEGER:
         {
             int32_t number = std::stoi(args[0]);
+            uint32_t big_endian = htonl(static_cast<uint32_t>(number));
 
-            int8_t casted_int[4];
+            key.append(reinterpret_cast<const char*>(&big_endian), sizeof(big_endian));
 
-            memcpy(casted_int, &number, 4);
-
-            for (int j = 0; j < 4; j++)
-            {
-                key += static_cast<char>(casted_int[j]);
-            }
 
             insertion_result = file->insert_primary_index<MyBtree4>(key,record, index_tree4, table);
             break;
@@ -91,9 +86,17 @@ int Database::insert(const std::string& tableName, const StringVec& args)
             switch (column.type)
             {
                 case Type::INTEGER:
-                    file->insert_secondary_index<MyBtree4>(secondary_key, table, 
+                {
+                    int32_t number = std::stoi(secondary_key);
+                    uint32_t big_endian = htonl(static_cast<uint32_t>(number));
+
+                    std::string int_key;
+                    int_key.append(reinterpret_cast<const char*>(&big_endian), sizeof(big_endian));
+
+                    file->insert_secondary_index<MyBtree4>(int_key, table, 
                         index_tree4,insertion_result, column_index);
                     break;
+                }
                 case Type::CHAR8:
                     file->insert_secondary_index<MyBtree8>(strip_quotes(secondary_key), table, 
                         index_tree8, insertion_result, column_index);

@@ -139,6 +139,7 @@ private:
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth, std::ostream& out);
     int get_underflow_amount();
+    int leaf_lower_bound(NodeT* leaf, const std::string &key);
     int leaf_contains(NodeT* leaf, const std::string &key);
     off_t search_recursive(char* search_key, InternalNodeT* node);
 };

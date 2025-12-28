@@ -179,8 +179,19 @@ void File::build_secondary_index(Table& table, int columnIndex,
             // Dispatch to the correct secondary B+Tree
             switch (secondaryKeyType) {
                 case Type::INTEGER:
-                    insert_secondary_index(key, table, *index4, record_location, columnIndex);
+                {
+                    if (key.size() != 4) throw std::runtime_error("Key must be 4 bytes");
+
+                    uint32_t little_endian_val;
+                    std::memcpy(&little_endian_val, key.data(), 4);
+
+                    // Convert to big endian
+                    uint32_t big_endian_val = htonl(little_endian_val);
+
+                    std::string int_key(reinterpret_cast<const char*>(&big_endian_val), 4);
+                    insert_secondary_index(int_key, table, *index4, record_location, columnIndex);
                     break;
+                }
                 case Type::CHAR32:
                     insert_secondary_index(key, table, *index32, record_location, columnIndex);
                     break;

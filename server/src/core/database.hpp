@@ -2,6 +2,7 @@
 #include "../config.h"
 #include "btree.hpp"
 #include "../storage/record.hpp"
+#include <arpa/inet.h>
 #include <variant>
 
 class File;

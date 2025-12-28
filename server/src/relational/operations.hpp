@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <optional>
+#include <arpa/inet.h>
 #include "../storage/record.hpp"
 
 #include "../core/table.hpp"
@@ -56,4 +57,5 @@ private:
 
     std::unique_ptr<TreeCursor> cursor_;
 
+    bool in_range(const Key& key, const Predicate& pred);
 };
