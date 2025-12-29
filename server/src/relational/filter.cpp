@@ -1,0 +1,104 @@
+#include "operations.hpp"
+
+Filter::Filter(Database& database, Table& table, std::unique_ptr<Operator> child)
+    : table_(table), database_(database), child_(std::move(child))
+{
+    tables_.push_back(&table_);
+}
+
+
+void Filter::add_predicate(const Predicate* pred)
+{
+    predicates_.push_back(pred);
+}
+
+bool Filter::in_range(Output& to_check)
+{
+    for (const auto& pred : predicates_)
+    {
+        std::string column_name = std::get<ColumnOperand>(pred->left).column;
+        
+        const Type columnType = table_.get_column(column_name).type;
+
+        int column_index = table_.get_column_index(column_name);
+
+        std::string token = to_check.record.get_token(column_index, table_);
+
+        if (columnType == Type::INTEGER) {
+            int32_t val;
+            memcpy(&val, token.data(), sizeof(int32_t));
+            //val = ntohl(val);  // convert from big-endian if needed
+
+            int32_t literal_val = std::stoi(strip_quotes(std::get<LiteralOperand>(pred->right).literal));
+
+            switch (pred->op)
+            {
+                case AST::Op::EQ:  
+                    if (!(val == literal_val)) return false; 
+                    break;
+                case AST::Op::LT:  
+                    if (!(val < literal_val)) return false; 
+                    break;
+                case AST::Op::LTE: 
+                    if (!(val <= literal_val)) return false; 
+                    break;
+                case AST::Op::GT:  
+                    if (!(val > literal_val)) return false; 
+                    break;
+                case AST::Op::GTE: 
+                    if (!(val >= literal_val)) return false; 
+                    break;
+                default: 
+                    throw std::runtime_error("Unsupported operation in in_range");
+            }
+        } 
+        else {
+            // CHAR/TEXT columns: compare strings
+            std::string literal_str = strip_quotes(std::get<LiteralOperand>(pred->right).literal);
+            int cmp = token.compare(literal_str);
+
+            switch (pred->op)
+            {
+                case AST::Op::EQ:  
+                    if (!(cmp == 0)) return false; 
+                    break;
+                case AST::Op::LT:  
+                    if (!(cmp < 0)) return false; 
+                    break;
+                case AST::Op::LTE: 
+                    if (!(cmp <= 0)) return false; 
+                    break;
+                case AST::Op::GT:  
+                    if (!(cmp > 0)) return false; 
+                    break;
+                case AST::Op::GTE: 
+                    if (!(cmp >= 0)) return false; 
+                    break;
+                default: 
+                    throw std::runtime_error("Unsupported operation in in_range");
+            }
+        } 
+    }
+
+    return true;
+    
+}
+
+bool Filter::next(Output &output)
+{
+    if(child_->next(output))
+    {
+        if(in_range(output))
+        {
+            return true;
+        }
+        else 
+        {
+            return next(output);
+        }
+    }
+    else
+    {
+        return false;
+    }
+}

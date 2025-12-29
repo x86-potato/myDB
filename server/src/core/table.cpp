@@ -192,13 +192,22 @@ bool Table::indexed_on_column(int column_index) {
 }
 
 
-bool Table::indexed_on_column(const std::string& column_name) {
+bool Table::indexed_on_column(const std::string& column_name) const {
     for (const auto& col : columns) {
         if (col.name == column_name) {
             return col.indexLocation != -1;
         }
     }
     return false;
+}
+
+int Table::get_column_index(const std::string& column_name) const {
+    for (int i = 0; i < static_cast<int>(columns.size()); i++) {
+        if (columns[i].name == column_name) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 Column& Table::get_column(int column_index) {

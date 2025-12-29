@@ -95,7 +95,7 @@ void Executor::execute_select(AST::SelectQuery* query) {
     {
        return;
     }
-    plan.debug_print_plan(plan);
+    //plan.debug_print_plan(plan);
 
 
     if(plan.paths.size() == 0)
@@ -111,11 +111,7 @@ void Executor::execute_select(AST::SelectQuery* query) {
 
         plan_executor.Execute();
     }
-    //using Cursor32 = <MyBtree32>;
-    //database.index_tree32.root_node = database.file->load_node<typename MyBtree32::NodeType>(index_location);
-    //BPlusTreeCursor<MyBtree32> cursor(&database.index_tree32, plan.paths[0].predicates[0].right);    
 
-    //display_results(results);
 }
 
 void Executor::execute_create_table(AST::CreateTableQuery* query) {

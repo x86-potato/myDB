@@ -19,7 +19,9 @@ public:
     Output() = default;
 
     Record record;
+    Table *table = nullptr;
 };
+
 
 class Operator
 {
@@ -58,4 +60,29 @@ private:
     std::unique_ptr<TreeCursor> cursor_;
 
     bool in_range(const Key& key, const Predicate& pred);
+};
+
+
+
+class Filter : public Operator {
+public:
+    Filter(Database& database, Table& table, std::unique_ptr<Operator> child);
+
+    void add_predicate(const Predicate* pred);
+
+    bool next(Output &output) override;
+
+private:
+    std::unique_ptr<Operator> child_;
+    Table& table_;
+    
+
+    Database& database_;
+    std::vector<const Predicate*> predicates_;
+
+
+
+    bool in_range(Output& to_check);
+
+
 };
