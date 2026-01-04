@@ -164,19 +164,14 @@ void Executor::execute_load(AST::LoadQuery* query) {
             value.erase(0, value.find_first_not_of(" \t\r\n"));
             value.erase(value.find_last_not_of(" \t\r\n") + 1);
 
-            for (auto &val : values) {
-                std::cout << val << " | ";
-            }
+
             
             values.push_back(value);
         }
 
         // Insert the row into the database
-        try {
-            database.insert(query->tableName, values);
-        } catch (const std::exception& e) {
-            std::cerr << "Error inserting row " << lineNumber << ": " << e.what() << std::endl;
-        }
+        database.insert(query->tableName, values);
+
     }
 
     file.close();

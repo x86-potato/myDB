@@ -727,7 +727,7 @@ off_t File::write_record(Record &record)
 
         cache.write_to_page(new_page, 0,node, BLOCK_SIZE, free_data_pointer);
 
-        std::cout << "new block :" << free_data_pointer << "\n";
+        //std::cout << "new block :" << free_data_pointer << "\n";
 
         Page *header_page = cache.read_block(0);
 

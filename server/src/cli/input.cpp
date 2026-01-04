@@ -21,6 +21,7 @@ void CLI::run() {
             std::cout << "\nExecution time: " << elapsed.count() << " µs\n";
         }
 
+
         std::cout << "db> ";
     }
 }
