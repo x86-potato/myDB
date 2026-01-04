@@ -775,166 +775,143 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert_up_into(Insert_Up_Data d
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::split_leaf(NodeT* node)
 {
-    NodeT* right_node = new LeafNodeT();
+    LeafNodeT right_node = {};
     off_t right_node_location = file->alloc_block();
-    //std::cout << "alloced block : " << right_node_location;
-    right_node->disk_location = right_node_location;
+    right_node.disk_location = right_node_location;
     assert(node->is_leaf);
     LeafNodeT* node_cast = static_cast<LeafNodeT*>(node);
-    LeafNodeT* right_node_cast = static_cast<LeafNodeT*>(right_node);
+    LeafNodeT* right_node_cast = &right_node;
     right_node_cast->next_leaf = node_cast->next_leaf;
     node_cast->next_leaf = right_node_cast->disk_location;
    
     int middle_index = MaxKeys/2;
-    char middle_key[KeyLen] = {0};  // ACTUAL ARRAY to store the key value
-    std::memcpy(middle_key, node->keys[middle_index], KeyLen);  // COPY the value
-    right_node->parent = node->parent;
+    char middle_key[KeyLen] = {0};
+    std::memcpy(middle_key, node->keys[middle_index], KeyLen);
+    right_node.parent = node->parent;
 
     char temp_keys[MaxKeys][KeyLen] = {0};
     std::memcpy(temp_keys, node->keys, sizeof(node->keys));
     for (int i = middle_index; i < MaxKeys; i++) {
         std::fill(std::begin(node->keys[i]), std::end(node->keys[i]), 0);
     }
-    //for (int i = 0; i < MaxKeys; i++) {
-    //    //std::fill(std::begin(right_node->keys[i]), std::end(right_node->keys[i]), 0);
-   // }
     for (int i = middle_index; i < MaxKeys; i++) {
-        std::memcpy(right_node->keys[i - middle_index], temp_keys[i], KeyLen);
+        std::memcpy(right_node_cast->keys[i - middle_index], temp_keys[i], KeyLen);  // Changed: use ->
     }  
-    // make a temp copy of the values before zeroing
     off_t temp_values[MaxKeys] = {0};
     std::memcpy(temp_values, node_cast->values, sizeof(node_cast->values));
-    // clear out values in the left node after middle_index
     for (int i = middle_index; i < MaxKeys; i++) {
         node_cast->values[i] = 0;
     }
-    // move the right half into the right_node
     for (int i = middle_index; i < MaxKeys; i++) {
         right_node_cast->values[i - middle_index] = temp_values[i];
     }
     node->current_key_count = middle_index;
-    right_node->current_key_count = MaxKeys - middle_index;
+    right_node.current_key_count = MaxKeys - middle_index;  // Changed: use .
+    
     if (node->parent == 0)
     {
-        NodeT* new_parent = new InternalNodeT();
-        new_parent->disk_location = file->alloc_block();
-        InternalNodeT* new_parent_cast = static_cast<InternalNodeT*>(new_parent);
-        new_parent->is_leaf = false;
+        InternalNodeT new_parent = {};
+        new_parent.disk_location = file->alloc_block();
+        InternalNodeT* new_parent_cast = &new_parent;
+        new_parent.is_leaf = false;
         new_parent_cast->children[0] = node->disk_location;
-        new_parent_cast->children[1] = right_node->disk_location;
+        new_parent_cast->children[1] = right_node.disk_location;
 
-        node->parent = new_parent->disk_location;
-        right_node->parent = new_parent->disk_location;
+        node->parent = new_parent.disk_location;
+        right_node.parent = new_parent.disk_location;  // Changed: use .
 
-        root_node = new_parent;
-        tree_root = new_parent->disk_location;
-        //file->update_root_pointer();
+        root_node = &new_parent;  // Changed: take address
+        tree_root = new_parent.disk_location;
 
-        std::memcpy(new_parent->keys[0], middle_key, KeyLen);
-        new_parent->current_key_count = 1;            
-
-        file->update_node(right_node,right_node->disk_location, sizeof(InternalNodeT));
-        file->update_node(node,node->disk_location, sizeof(InternalNodeT));
-        file->update_node(new_parent,new_parent->disk_location, sizeof(InternalNodeT));
-
-
-        delete new_parent;
+        std::memcpy(new_parent.keys[0], middle_key, KeyLen);
+        new_parent.current_key_count = 1;            
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&right_node)), right_node.disk_location, sizeof(LeafNodeT));
+        file->update_node(node, node->disk_location, sizeof(LeafNodeT));
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&new_parent)), new_parent.disk_location, sizeof(InternalNodeT));
     }
     else
     {
         Insert_Up_Data data = {};
-        memcpy(data.key,middle_key,KeyLen);
+        memcpy(data.key, middle_key, KeyLen);
         data.left_child = node->disk_location;
-        data.right_child = right_node->disk_location;
-        file->update_node(right_node,right_node->disk_location, sizeof(InternalNodeT));
-        file->update_node(node,node->disk_location, sizeof(InternalNodeT));
+        data.right_child = right_node.disk_location;
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&right_node)), right_node.disk_location, sizeof(LeafNodeT));
+        file->update_node(node, node->disk_location, sizeof(LeafNodeT));
        
-        insert_up_into (data,node->parent);
+        insert_up_into(data, node->parent);
     }
-    delete right_node;
 }
+
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::split_internal(NodeT* node)
 {
-    NodeT* right_node = new InternalNodeT();
+    InternalNodeT right_node = {};
     off_t right_node_location = file->alloc_block();
-    right_node->disk_location = right_node_location;
-    right_node->is_leaf = false;
-    right_node->parent = node->parent;
+    right_node.disk_location = right_node_location;
+    right_node.is_leaf = false;
+    right_node.parent = node->parent;
     int middle_index = MaxKeys/2;
-    char middle_key[KeyLen] = {0};  // ACTUAL ARRAY to store the key value
-    std::memcpy(middle_key, node->keys[middle_index], KeyLen);  // COPY the value
+    char middle_key[KeyLen] = {0};
+    std::memcpy(middle_key, node->keys[middle_index], KeyLen);
 
     char temp_keys[MaxKeys][KeyLen] = {0};
-    std::memcpy(temp_keys, node->keys, sizeof(node->keys)); // copy all keys
-    // Zero out the right half of the left node
+    std::memcpy(temp_keys, node->keys, sizeof(node->keys));
     for (int i = middle_index; i < MaxKeys; i++) {
         std::fill(std::begin(node->keys[i]), std::end(node->keys[i]), 0);
     }
-    //for (int i = 0; i < MaxKeys; i++) {
-    //    std::fill(std::begin(right_node->keys[i]), std::end(right_node->keys[i]), 0);
-    //}
-    // Copy the upper half into the right node
-    InternalNodeT* right_leaf = static_cast<InternalNodeT*>(right_node);
+    InternalNodeT* right_leaf = &right_node;
     for (int i = middle_index+1; i < MaxKeys; i++) {
         std::memcpy(right_leaf->keys[i - middle_index-1], temp_keys[i], KeyLen);
     }
     node->current_key_count = middle_index;
-    right_node->current_key_count = MaxKeys - middle_index - 1;
-    // handle children pointers
+    right_node.current_key_count = MaxKeys - middle_index - 1;
     InternalNodeT* node_cast = static_cast<InternalNodeT*>(node);
-    InternalNodeT* right_cast = static_cast<InternalNodeT*>(right_node);
-    // left node keeps first (middle_index + 1) children
-    // right node gets remaining children
+    InternalNodeT* right_cast = &right_node;
    
     for (int i = middle_index + 1; i <= MaxKeys; i++) {
         right_cast->children[i - (middle_index + 1)] = node_cast->children[i];
        
-        if (node_cast->children[i]) {  // FIXED: Update parent pointer
+        if (node_cast->children[i]) {
             NodeT* child = file->load_node<NodeT>(node_cast->children[i]);
-            child->parent = right_node->disk_location;
-            file->update_node(child,child->disk_location, sizeof(InternalNodeT));
+            child->parent = right_node.disk_location;
+            file->update_node(child, child->disk_location, sizeof(InternalNodeT));
         }
         node_cast->children[i] = 0;
     }
+    
     if (node->parent != 0)
     {
         Insert_Up_Data data = {};
         std::memcpy(data.key, middle_key, KeyLen);
        
         data.left_child = node->disk_location;
-        data.right_child = right_node->disk_location;
-        file->update_node(right_node,right_node_location, sizeof(InternalNodeT));
-        file->update_node(node,node->disk_location, sizeof(InternalNodeT));
-        insert_up_into(data,node->parent);
+        data.right_child = right_node.disk_location;
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&right_node)), right_node_location, sizeof(InternalNodeT));
+        file->update_node(node, node->disk_location, sizeof(InternalNodeT));
+        insert_up_into(data, node->parent);
     }
     else
     {
-        NodeT* new_parent = new InternalNodeT();
+        InternalNodeT new_parent = {};
         off_t new_parent_location = file->alloc_block();
-        new_parent->disk_location = new_parent_location;
-        root_node = new_parent;
+        new_parent.disk_location = new_parent_location;
+        root_node = &new_parent;  // Changed: take address
 
         tree_root = new_parent_location;
 
-        //file->update_root_pointer();
-        InternalNodeT* new_parent_cast = static_cast<InternalNodeT*>(new_parent);
-        new_parent_cast->children[1] = right_node->disk_location;
+        InternalNodeT* new_parent_cast = &new_parent;
+        new_parent_cast->children[1] = right_node.disk_location;
         new_parent_cast->children[0] = node->disk_location;
-        new_parent->is_leaf = false;
-        new_parent->current_key_count = 1;
-        node->parent = new_parent->disk_location;
-        right_node->parent = new_parent->disk_location;
+        new_parent.is_leaf = false;
+        new_parent.current_key_count = 1;
+        node->parent = new_parent.disk_location;
+        right_node.parent = new_parent.disk_location;  // Changed: use .
        
-        std::memcpy(new_parent->keys[0], middle_key, KeyLen);
-        file->update_node(new_parent, new_parent_location, sizeof(InternalNodeT));
+        std::memcpy(new_parent.keys[0], middle_key, KeyLen);
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&new_parent)), new_parent_location, sizeof(InternalNodeT));
         file->update_node(node, node->disk_location, sizeof(InternalNodeT));
-        file->update_node(right_node, right_node->disk_location, sizeof(InternalNodeT));
-        
-        delete new_parent;
+        file->update_node(static_cast<NodeT*>(static_cast<void*>(&right_node)), right_node.disk_location, sizeof(InternalNodeT));
     }
-
-    delete right_node;
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::insert_key_into_node(Insert_Up_Data data, NodeT* node)

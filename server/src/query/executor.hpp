@@ -25,6 +25,8 @@ public:
     void execute_select(AST::SelectQuery* query);
     void execute_create_table(AST::CreateTableQuery* query);
 
+    void execute_load(AST::LoadQuery* query);
+    void execute_run(AST::RunQuery* query);
     void execute_create_index(AST::InsertQuery* query);
     void execute_create_index(AST::CreateIndexQuery* query);
 };

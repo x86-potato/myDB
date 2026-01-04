@@ -1,7 +1,7 @@
 #include "operations.hpp"
 
-Filter::Filter(Database& database, Table& table, std::unique_ptr<Operator> child)
-    : table_(table), database_(database), child_(std::move(child))
+Filter::Filter(Database& database, const Table& table, std::unique_ptr<Operator> child)
+    :  database_(database), table_(table), child_(std::move(child))
 {
     tables_.push_back(&table_);
 }
@@ -22,7 +22,10 @@ bool Filter::in_range(Output& to_check)
 
         int column_index = table_.get_column_index(column_name);
 
-        std::string token = to_check.record.get_token(column_index, table_);
+        //here assume only single output tuple in output
+        assert (to_check.tuples_.size() == 1);
+
+        std::string token = to_check.tuples_[0].record.get_token(column_index, table_);
 
         if (columnType == Type::INTEGER) {
             int32_t val;
@@ -82,6 +85,19 @@ bool Filter::in_range(Output& to_check)
 
     return true;
     
+}
+
+void Filter::reset()
+{
+    child_->reset();
+}
+void Filter::set_key(const std::optional<Key>& key)
+{
+    child_->set_key(key);
+}
+void Filter::set_key_on_column(const std::optional<Key>& key, const std::string& column_name)
+{
+    child_->set_key_on_column(key, column_name);
 }
 
 bool Filter::next(Output &output)

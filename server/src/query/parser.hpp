@@ -49,6 +49,8 @@ private:
     ParserReturn parseCreate();
     ParserReturn parseInsert();
     ParserReturn parseSelect();
+    ParserReturn parseLoad();
+    ParserReturn parseRun();
 
 public:
     Parser();

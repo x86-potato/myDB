@@ -29,7 +29,7 @@ Type string_to_type(std::string &check)
     return Type::INTEGER;
 }
 
-std::string type_to_string(Type &check)
+std::string type_to_string(const Type &check)
 {
     switch (check) {
         case Type::CHAR32:  return "char32";
@@ -42,7 +42,7 @@ std::string type_to_string(Type &check)
     }
 }
 
-int type_len(Type &check)
+int type_len(const Type &check)
 {
     switch (check) {
         case Type::INTEGER: return 4;
@@ -122,7 +122,7 @@ Table::Table(std::byte* data, int len)
 void Table::table_print()
 {
     std::cout << "\ntable name: " << name << std::endl;
-    for (auto &i : columns) {
+    for (const auto &i : columns) {
         std::cout << "column: " << i.name << " " << TypeUtil::type_to_string(i.type) << i.indexLocation << std::endl;
     }
 }
@@ -210,14 +210,14 @@ int Table::get_column_index(const std::string& column_name) const {
     return -1;
 }
 
-Column& Table::get_column(int column_index) {
+const Column& Table::get_column(int column_index) const {
     if (column_index < 0 || column_index >= static_cast<int>(columns.size())) {
         throw std::out_of_range("Column index out of range");
     }
     return columns[column_index];
 }
-Column& Table::get_column(const std::string& column_name) {
-    for (auto& col : columns) {
+const Column& Table::get_column(const std::string& column_name) const {
+    for (const auto& col : columns) {
         if (col.name == column_name) {
             return col;
         }

@@ -14,7 +14,9 @@ namespace AST
         CreateTable,
         CreateIndex,
         Insert,
-        Select
+        Select,
+        Load,
+        Run
     };
 
     struct Query
@@ -100,10 +102,18 @@ namespace AST
     };
     struct SelectQuery : Query
     {
-        string tableName;
-        //to do: multi table join later
+        StringVec tableNames;
         bool has_where = false;
         Condition condition;
+    };
+    struct LoadQuery : Query
+    {
+        string tableName;
+        string fileName;
+    };
+    struct RunQuery : Query
+    {
+        string fileName;
     };
 
     inline int precedence(const Op &op)
@@ -190,6 +200,8 @@ namespace AST
 
             if constexpr (std::is_same_v<T, ColumnRef>) {
                 print_indent();
+                std::cout << "Table: " << arg.table << "\n";
+                print_indent();
                 std::cout << "Column: " << arg.column << "\n";
 
             } else if constexpr (std::is_same_v<T, Literal>) {
@@ -228,7 +240,10 @@ namespace AST
 
     // Print the full SelectQuery tree
     inline void print_select_query_tree(const SelectQuery& query) {
-        std::cout << "SelectQuery on table: " << query.tableName << "\n";
+        for (const auto& table : query.tableNames)
+        {
+            std::cout << "Table: " << table << "\n";
+        }
 
         if (!query.has_where || !query.condition.root) {
             std::cout << "No WHERE clause.\n";

@@ -175,7 +175,8 @@ void File::build_secondary_index(Table& table, int columnIndex,
             std::string key = record.get_token(columnIndex, table);
             Type secondaryKeyType = table.columns[columnIndex].type;
             off_t index_location = table.columns[columnIndex].indexLocation;
-            std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << std::endl;
+
+            //std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << std::endl;
             // Dispatch to the correct secondary B+Tree
             switch (secondaryKeyType) {
                 case Type::INTEGER:
@@ -667,7 +668,7 @@ int File::open_file()
 
 }
 // @brief returns record located at an offset
-Record File::get_record(off_t record_location, Table& table)
+Record File::get_record(off_t record_location, const Table& table)
 {
     off_t page_offset = (record_location/BLOCK_SIZE) * BLOCK_SIZE;
     off_t record_offset = record_location % BLOCK_SIZE;

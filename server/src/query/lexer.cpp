@@ -133,8 +133,8 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
     }
 
     // Debug output
-    for (const auto& token : TokenList)
-    {
-        //std::cout << token.name << " " << TokenTypeToString(token.type) << std::endl;
-    }
+    // for (const auto& token : TokenList)
+    // {
+    //     //std::cout << token.name << " " << TokenTypeToString(token.type) << std::endl;
+    // }
 }

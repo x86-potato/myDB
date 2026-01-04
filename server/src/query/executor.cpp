@@ -36,11 +36,23 @@ void Executor::execute (const std::string &input)
             break;
             
         case AST::QueryType::Select:
+            //AST::print_select_query_tree(
+            //    *(static_cast<AST::SelectQuery*>(queryAST.get()))
+            //);
             execute_select(
                 static_cast<AST::SelectQuery*>(queryAST.get())
             );
             break;
-            
+        case AST::QueryType::Load:
+            execute_load(
+                static_cast<AST::LoadQuery*>(queryAST.get())
+            );
+            break;        
+        case AST::QueryType::Run:
+            execute_run(
+                static_cast<AST::RunQuery*>(queryAST.get())
+            );
+            break;    
         case AST::QueryType::CreateIndex:
             execute_create_index(
                 static_cast<AST::CreateIndexQuery*>(queryAST.get())
@@ -114,6 +126,64 @@ void Executor::execute_select(AST::SelectQuery* query) {
 
 }
 
+void Executor::execute_load(AST::LoadQuery* query) {
+    // Debug: print current working directory
+    std::string filename = query->fileName;
+    if (filename.front() == '"' && filename.back() == '"') {
+        filename = filename.substr(1, filename.length() - 2);
+    }
+
+    // Open the CSV file
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename  << std::endl;
+        return;
+    }
+
+    std::string line;
+    int lineNumber = 0;
+
+    // Skip the first line (header)
+    std::getline(file, line);
+    lineNumber++;
+
+    // Process each data line
+    while (std::getline(file, line)) {
+        lineNumber++;
+
+        // Skip empty lines
+        if (line.empty()) continue;
+
+        // Parse CSV line into values
+        StringVec values;
+        std::stringstream ss(line);
+        std::string value;
+
+        while (std::getline(ss, value, ',')) {
+            // Trim whitespace
+            value.erase(0, value.find_first_not_of(" \t\r\n"));
+            value.erase(value.find_last_not_of(" \t\r\n") + 1);
+
+            for (auto &val : values) {
+                std::cout << val << " | ";
+            }
+            
+            values.push_back(value);
+        }
+
+        // Insert the row into the database
+        try {
+            database.insert(query->tableName, values);
+        } catch (const std::exception& e) {
+            std::cerr << "Error inserting row " << lineNumber << ": " << e.what() << std::endl;
+        }
+    }
+
+    file.close();
+    std::cout << "Successfully loaded " << (lineNumber - 1) << " rows into table " 
+              << query->tableName << std::endl;
+}
+
 void Executor::execute_create_table(AST::CreateTableQuery* query) {
     if (validateCreateTableQuery(*query, database) == false)
     {
@@ -153,4 +223,39 @@ void Executor::execute_insert(AST::InsertQuery* query) {
 
     database.insert(tableName, values);
 
+}
+
+void Executor::execute_run(AST::RunQuery* query) {
+    std::string filename = query->fileName;
+    if (filename.front() == '"' && filename.back() == '"') {
+        filename = filename.substr(1, filename.length() - 2);
+    }
+
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cout << "Error: Could not open file " << filename  << std::endl;
+        return;
+    }
+
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
+    // Parse multiple queries separated by semicolons
+    size_t start = 0;
+    size_t end = content.find(';');
+    
+    while (end != std::string::npos) {
+        std::string query_str = content.substr(start, end - start);
+        
+        // Trim whitespace
+        query_str.erase(0, query_str.find_first_not_of(" \t\r\n"));
+        query_str.erase(query_str.find_last_not_of(" \t\r\n") + 1);
+        
+        if (!query_str.empty()) {
+            execute(query_str + ";");
+        }
+        
+        start = end + 1;
+        end = content.find(';', start);
+    }
 }

@@ -8,12 +8,12 @@ Plan::Plan(const AST::SelectQuery& query)
     if (!query.has_where || !query.condition.root)
     {
         Path initial_path;
-        initial_path.tables.push_back(query.tableName);
+        initial_path.tables = query.tableNames;
         paths.push_back(initial_path);
         return;
     }
 
-    paths.push_back(Path{.tables = {query.tableName}, .predicates = {},}); // start with one path
+    paths.push_back(Path{.tables = query.tableNames, .predicates = {},}); // start with one path
     build_paths(query.condition.root.get(), paths);
 }
 
@@ -118,6 +118,7 @@ Predicate Plan::make_predicate(AST::Expr* expr)
         };
     }
 
+    throw std::runtime_error("Predicate maker failed");
 }
 void Plan::debug_print_predicate(const Predicate& p)
 {

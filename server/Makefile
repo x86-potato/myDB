@@ -1,24 +1,36 @@
 CC = g++
 
-# language standard (always on)
 STD = -std=c++17
+WARN = -Wall -Wextra
 
+# Always on
+BASE = $(STD) $(WARN)
 
-BASE_FLAGS = $(STD) -Wall -Wextra
+# ---- Build modes ----
 
-RELEASE_FLAGS = -g -O0
+# Default DEV build (no optimization, debug symbols)
+DEV_FLAGS = -g -O0
 
-DEBUG_FLAGS = -g -O1 \
+# Debug with sanitizers (heavy, slow)
+DBG_FLAGS = -g -O1 \
 	-fsanitize=address,undefined \
 	-fno-omit-frame-pointer \
 	-D_GLIBCXX_DEBUG
 
-# select flags based on DEBUG
+# Production / benchmark build
+PROD_FLAGS = -O3 -DNDEBUG
+
+# ---- Mode selection ----
+# Priority: DEBUG > PROD > DEV
+
 ifeq ($(DEBUG),1)
-	CFLAGS = $(BASE_FLAGS) $(DEBUG_FLAGS)
+	CFLAGS = $(BASE) $(DBG_FLAGS)
+else ifeq ($(PROD),1)
+	CFLAGS = $(BASE) $(PROD_FLAGS)
 else
-	CFLAGS = $(BASE_FLAGS) $(RELEASE_FLAGS)
+	CFLAGS = $(BASE) $(DEV_FLAGS)
 endif
+
 
 SRC_DIR = src
 OBJ_DEST_DIR = obj

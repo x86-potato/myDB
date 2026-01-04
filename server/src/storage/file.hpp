@@ -114,7 +114,7 @@ public:
     std::vector<Table> load_table();
 
     off_t write_record(Record &record);
-    Record get_record(off_t record_location, Table& table);
+    Record get_record(off_t record_location, const Table& table);
 
 private:
     void header_block_creation();

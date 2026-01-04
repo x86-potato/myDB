@@ -27,7 +27,7 @@ public:
 
     void flush();
 
-    Table& get_table(const std::string& tableName);
+    const Table& get_table(const std::string& tableName) const;
 
     void update_index_location(Table &table, int column_index, off_t new_index_location);
     int insert(const std::string& tableName, const StringVec& args);

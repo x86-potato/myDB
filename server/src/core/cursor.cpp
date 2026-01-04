@@ -25,49 +25,56 @@ off_t BPlusTreeCursor<TreeType>::get_value() const
 
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::next() {
+    if (!started && set_externally) {
+        // If set externally but not started, do not advance
+        started = true;
+        return true;
+    }
     if (!started) {
+        // Not positioned yet: position once using existing key (or start)
         started = true;
 
-        bool positioned = set(key); 
-        if (!positioned) return false;
+        if (!set(key)) return false;
 
         if (skip_equals) {
-
-            // Skip the literal for '>'
             if (this->key.has_value() && key_equals(this->key.value())) {
-                // advance to next key safely
                 if (location.key_index + 1 >= location.leaf.current_key_count) {
-                    // TODO: handle moving to next leaf if your B+ tree supports it
                     return false;
                 }
                 location.key_index++;
                 value = location.leaf.values[location.key_index];
                 memcpy(current_key.bytes.data(),
-                    location.leaf.keys[location.key_index],
-                    TreeType::KeyLen);
+                       location.leaf.keys[location.key_index],
+                       TreeType::KeyLen);
             }
-
-            return true;
         }
-
         return true;
     }
 
-    // normal next
-    if (location.key_index + 1 >= location.leaf.current_key_count)
+    //if last leaf
+    if (location.leaf.next_leaf == 0 && location.key_index + 1 >= location.leaf.current_key_count)
         return false;
 
+    //if at end of current leaf
+    if (location.key_index + 1 >= location.leaf.current_key_count) {
+        // load next leaf node as pointer
+        typename TreeType::NodeType* temp_ptr =
+            tree->file->template load_node<typename TreeType::NodeType>(location.leaf.next_leaf);
+
+        // copy the leaf node contents into location.leaf
+        location.leaf = *static_cast<typename TreeType::LeafNodeType*>(temp_ptr);
+
+        location.key_index = -1;
+    }
     location.key_index++;
     value = location.leaf.values[location.key_index];
-    current_key.bytes.resize(TreeType::KeyLen); // ensure correct size
+    current_key.bytes.resize(TreeType::KeyLen);
     memcpy(current_key.bytes.data(),
-        location.leaf.keys[location.key_index],
-        TreeType::KeyLen);
+           location.leaf.keys[location.key_index],
+           TreeType::KeyLen);
 
     return true;
 }
-
-
 
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
@@ -95,7 +102,6 @@ bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
 
     return true;
 }
-
 
 
 

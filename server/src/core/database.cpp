@@ -21,7 +21,7 @@ Database::Database ()
 
 }
 
-Table& Database::get_table(const std::string& tableName)
+const Table& Database::get_table(const std::string& tableName) const
 {
     return tableMap.at(tableName);
 }

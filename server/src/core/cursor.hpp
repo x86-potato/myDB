@@ -12,9 +12,11 @@ struct Key {
 class TreeCursor {
 public:
     off_t tree_root = 0;
-    Database* db = nullptr;
+    const Database* db = nullptr;
     std::optional<Key> key;
     bool skip_equals = false;
+
+    bool set_externally = false;
 
     virtual bool next() = 0;
     virtual ~TreeCursor() = default;
@@ -34,6 +36,7 @@ public:
     off_t value;
     LocationData<typename TreeType::LeafNodeType> location;
     bool started = false;
+
 
     BPlusTreeCursor() = default;
     BPlusTreeCursor(TreeType* tree);

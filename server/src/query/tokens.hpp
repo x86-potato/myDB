@@ -14,6 +14,10 @@ enum class TokenType
     KW_INDEX,
     KW_ON,
 
+    //non sql
+    KW_LOAD,
+    KW_RUN,
+
     //CREATE flags
     BRACKET_OPEN,
     BRACKET_CLOSE,
@@ -100,6 +104,8 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::KW_INDEX:               return "KW_INDEX";
         case TokenType::KW_ON:                  return "KW_ON";
         case TokenType::KW_SELECT:              return "KW_SELECT";
+        case TokenType::KW_RUN:                 return "KW_RUN";
+
         case TokenType::KW_WHERE:               return "KW_WHERE";
         case TokenType::KW_MODIFY:              return "KW_MODIFY";
         case TokenType::KW_SET:                 return "KW_SET";
@@ -109,7 +115,7 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::KW_INSERT:              return "KW_INSERT";
         case TokenType::KW_INTO:                return "KW_INTO";
         case TokenType::KW_FROM:                return "KW_FROM";
-
+        case TokenType::KW_LOAD:                return "KW_LOAD";
         case TokenType::CHAR_32:                return "CHAR_32";
         case TokenType::CHAR_16:                return "CHAR_16";
         case TokenType::CHAR_8:                 return "CHAR_8";
@@ -156,6 +162,8 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"on",      TokenType::KW_ON},
         {"select",  TokenType::KW_SELECT},
         {"where",   TokenType::KW_WHERE},
+        {"run",      TokenType::KW_RUN},
+
         {"*", TokenType::ASTERISK},
         {"modify",  TokenType::KW_MODIFY},
         {"set",     TokenType::KW_SET},
@@ -164,7 +172,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"info",    TokenType::KW_INFO},
         {"insert",  TokenType::KW_INSERT},
         {"into",    TokenType::KW_INTO},
-
+        {"load",    TokenType::KW_LOAD},
         {"and",     TokenType::AND},
         {"or",      TokenType::OR},
 

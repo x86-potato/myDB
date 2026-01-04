@@ -47,8 +47,8 @@ struct Table {
 
     void table_print();
 
-    Column& get_column(int column_index);
-    Column& get_column(const std::string& column_name);
+    const Column& get_column(int column_index) const;
+    const Column& get_column(const std::string& column_name) const;
 
     int get_column_index(const std::string& column_name) const;
 

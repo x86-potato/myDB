@@ -332,7 +332,7 @@ std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
             {
                 //save current iterator
                 std::string lexed_table_name = tok->name; 
-                auto dot = iterator.getNext();
+                iterator.getNext();
                 auto id = iterator.getNext();
                 if (id->type == TokenType::IDENTIFIER)
                 {
@@ -351,7 +351,7 @@ std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
 
         case TokenType::OPENING_PARENTHESIS: {
             auto expr = parse_expr(0,table_name);            // parse inside parentheses
-            Token* close = iterator.getNext();    // consume the ')'
+            Token* close = iterator.getNext();    // consume th/e ')'
             if (!close || close->type != TokenType::CLOSING_PARENTHESIS) {
                 parserError("Expected closing parenthesis");
             }
@@ -385,12 +385,28 @@ ParserReturn Parser::parseSelect()
 
 
     // Expect table name
+
     Token* tableToken = iterator.getNext();
     if (tableToken->type != TokenType::IDENTIFIER) {
         parserError("Expected table name after SELECT");
         return {1, nullptr};
     }
-    query->tableName = tableToken->name;
+    query->tableNames.push_back(tableToken->name);
+
+    while (iterator.peeknext()->type == TokenType::COMMA) {
+        iterator.getNext(); // consume the comma
+        Token* tableToken = iterator.getNext();
+        if (tableToken->type != TokenType::IDENTIFIER) {
+            parserError("Expected table name after SELECT");
+            return {1, nullptr};
+        }
+        query->tableNames.push_back(tableToken->name);
+    }
+
+
+        
+
+    
 
     // expect where or semicolon
 
@@ -408,12 +424,72 @@ ParserReturn Parser::parseSelect()
 
     // Parse the conditions
     auto condition = std::make_unique<AST::Condition>();
-    condition->root = parse_expr(0, query->tableName); // precedence-aware parsing
+    condition->root = parse_expr(0, query->tableNames[0]); // precedence-aware parsing
     if(condition->root == nullptr)
         return {1, nullptr};
 
 
     query->condition = std::move(*condition);
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseLoad()
+{
+    auto query = std::make_unique<AST::LoadQuery>();
+    query->type = AST::QueryType::Load;
+
+    //expect file name
+    if(iterator.getNext()->type != TokenType::LITERAL)
+    {
+        parserError("Expected file name");
+        return {1, nullptr};
+    }
+    query.get()->fileName = iterator.getCurr()->name;
+
+    //expect into kw
+    if(iterator.getNext()->type != TokenType::KW_INTO)
+    {
+        parserError("Expected INTO keyword");
+        return {1, nullptr};
+    }
+    //expect table name
+    if(iterator.getNext()->type != TokenType::IDENTIFIER)
+    {
+        parserError("Expected table name");
+        return {1, nullptr};
+    }
+    query.get()->tableName = iterator.getCurr()->name;
+
+    //expect semi colon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseRun()
+{
+    auto query = std::make_unique<AST::RunQuery>();
+    query->type = AST::QueryType::Run;
+
+    //expect file name
+    if(iterator.getNext()->type != TokenType::LITERAL)
+    {
+        parserError("Expected file name");
+        return {1, nullptr};
+    }
+    query.get()->fileName = iterator.getCurr()->name;
+
+    //expect semi colon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
 
     return {0, std::move(query)};
 }
@@ -431,6 +507,11 @@ ParserReturn Parser::parse(std::vector<Token> &tokenList)
             return parseInsert();
         case TokenType::KW_SELECT:
             return parseSelect(); 
+        case TokenType::KW_LOAD:
+            return parseLoad();
+        case TokenType::KW_RUN:
+            return parseRun();
+            return {1, nullptr};
         default:
             parserError("No such query exists");
             break;

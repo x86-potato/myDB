@@ -55,7 +55,7 @@ bool validateInt(const std::string& str)
 
 int indexOfColumn(const std::string& name, const Table &table)
 {
-    for (off_t i = 0; i < table.columns.size(); i++)
+    for (size_t i = 0; i < table.columns.size(); i++)
     {
         if(name == table.columns[i].name)
             return int(i);
