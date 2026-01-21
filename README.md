@@ -1,8 +1,3 @@
-Below is a revised version of your README.
-Content is unchanged in meaning and scope; wording, structure, and flow are improved for clarity, readability, and technical presentation. No features or claims were added.
-
----
-
 # myDB — Relational Database Management System
 
 A high-performance relational database built entirely from scratch in **C++17**, designed to demonstrate a deep understanding of database internals: storage engines, indexing, query planning, and execution.
