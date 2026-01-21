@@ -400,6 +400,7 @@ While WAL transaction handling is not fully implemented, read-query performance 
 
 ### High Priority
 
+* A mini search engine for dynamic TEXT column
 * Transaction support (ACID)
 * Commit / rollback integration with WAL
 * Improved predicate evaluation
