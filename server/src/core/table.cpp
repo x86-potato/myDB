@@ -34,7 +34,7 @@ std::string type_to_string(const Type &check)
     switch (check) {
         case Type::CHAR32:  return "char32";
         case Type::CHAR16:  return "char16";
-        case Type::CHAR8:   return "char8"; 
+        case Type::CHAR8:   return "char8";
         case Type::INTEGER: return "int";
         case Type::TEXT:  return "text";
         case Type::BOOL: return "bool";
@@ -127,7 +127,7 @@ void Table::table_print()
     }
 }
 
-int Table::primaryLen()
+int Table::primaryLen() const
 {
     switch (columns[0].type)
     {
@@ -142,8 +142,8 @@ int Table::primaryLen()
         case (Type::CHAR8):
             return 8;
         case (Type::TEXT):
-            return 0; 
-        
+            return 0;
+
     }
     return 0;
 }
@@ -190,6 +190,8 @@ bool Table::indexed_on_column(int column_index) {
     }
     return columns[column_index].indexLocation != -1;
 }
+
+
 
 
 bool Table::indexed_on_column(const std::string& column_name) const {

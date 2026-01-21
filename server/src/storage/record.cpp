@@ -16,7 +16,52 @@ std::string strip_quotes(const std::string &input)
     return output;
 }
 
+void Record::update_column(int column_index, std::string &value, const Table& table)
+{
+    size_t offset = 0;
 
+    // Parse through columns like to_tokens does to find the correct offset
+    for (int i = 0; i < column_index; ++i)
+    {
+        switch (table.columns[i].type)
+        {
+            case Type::BOOL:
+                offset += 1;
+                break;
+            case Type::INTEGER:
+                offset += sizeof(int32_t);
+                break;
+            case Type::CHAR8:
+            case Type::CHAR16:
+            case Type::CHAR32:
+            case Type::TEXT:
+            {
+                uint8_t len = static_cast<uint8_t>(str[offset]);
+                offset += 1 + len;  // 1 byte for length + actual data
+                break;
+            }
+        }
+    }
+
+    // Now at the correct column, handle the update based on type
+    switch (table.columns[column_index].type)
+    {
+        case Type::BOOL:
+        case Type::INTEGER:
+            memcpy(str.data() + offset, value.c_str(), value.length());
+            break;
+        case Type::CHAR8:
+        case Type::CHAR16:
+        case Type::CHAR32:
+        case Type::TEXT:
+        {
+            uint8_t len = static_cast<uint8_t>(str[offset]);
+            assert(len == value.size());
+            memcpy(str.data() + offset + 1, value.c_str(), value.length());
+            break;
+        }
+    }
+}
 std::vector<std::string> Record::to_tokens(const Table& table) const {
     std::vector<std::string> tokens;
     size_t offset = 0;
@@ -42,8 +87,8 @@ std::vector<std::string> Record::to_tokens(const Table& table) const {
             case Type::CHAR32:
             case Type::TEXT:
             {
-                size_t len = column_lengths[i];
-                token = str.substr(offset, len);
+                uint8_t len = static_cast<uint8_t>(str[offset]);
+                token = str.substr(offset + 1, len);
                 break;
             }
         }
@@ -57,37 +102,64 @@ std::vector<std::string> Record::to_tokens(const Table& table) const {
 
 
 
-std::string Record::get_token(int index, const Table& table)
+std::string Record::get_token(int index, const Table& table) const
 {
     if (index < 0 || index >= static_cast<int>(table.columns.size()))
         throw std::out_of_range("Record::get_token: index out of range");
 
     size_t offset = 0;
     for (int i = 0; i < index; ++i)
+    {
         offset += column_lengths[i];
+    }
 
-    return str.substr(offset, column_lengths[index]);
+    // Handle like to_tokens does
+    switch (table.columns[index].type)
+    {
+        case Type::BOOL:
+            return (str[offset] == '1') ? "true" : "false";
+
+        case Type::INTEGER:
+        {
+            int32_t v;
+            memcpy(&v, str.data() + offset, sizeof(v));
+            return std::to_string(v);
+        }
+
+        case Type::CHAR8:
+        case Type::CHAR16:
+        case Type::CHAR32:
+        case Type::TEXT:
+        {
+            uint8_t len = static_cast<uint8_t>(str[offset]);
+            return str.substr(offset + 1, len);  // Skip length byte
+        }
+    }
+
+    return "";
 }
-
-
 Record::Record(const StringVec& tokens, const Table& table)
 {
     str.clear();
+    column_lengths.clear();  // Add this
 
     for (size_t i = 0; i < tokens.size(); ++i)
     {
+        size_t col_len = 0;  // Track column length
         switch (table.columns[i].type)
         {
             case Type::BOOL:
             {
                 bool v = (tokens[i] == "true");
                 str.push_back(v ? '1' : '0');
+                col_len = 1;
                 break;
             }
             case Type::INTEGER:
             {
                 int32_t v = std::stoi(tokens[i]);
                 str.append(reinterpret_cast<const char*>(&v), sizeof(v));
+                col_len = sizeof(v);
                 break;
             }
 
@@ -100,19 +172,21 @@ Record::Record(const StringVec& tokens, const Table& table)
                 uint8_t len = static_cast<uint8_t>(value.size());
                 str.push_back(static_cast<char>(len));
                 str.append(value.data(), len);
+                col_len = 1 + len;
                 break;
             }
             case Type::TEXT:
             {
-                //place holder, later will be replaced by file pointer
                 std::string value = strip_quotes(tokens[i]);
 
                 uint8_t len = static_cast<uint8_t>(value.size());
                 str.push_back(static_cast<char>(len));
                 str.append(value.data(), len);
+                col_len = 1 + len;
                 break;
             }
         }
+        column_lengths.push_back(col_len);  // Add this
     }
 
     length = str.size();
@@ -151,9 +225,10 @@ Record::Record(const std::byte* read_from, const Table& table)
             case Type::TEXT:
             {
                 uint8_t len = static_cast<uint8_t>(*p++);
+                str.push_back(static_cast<char>(len));
                 str.append(p, len);
                 p += len;
-                col_len = len;
+                col_len = 1 + len;
                 break;
             }
         }
@@ -162,4 +237,3 @@ Record::Record(const std::byte* read_from, const Table& table)
 
     length = str.size();
 }
-

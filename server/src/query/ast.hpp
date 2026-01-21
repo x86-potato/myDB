@@ -1,4 +1,5 @@
 #pragma once
+#include <random>
 #include <string>
 #include <variant>
 #include "../config.h"
@@ -7,16 +8,19 @@
 #include <variant>
 
 namespace AST
-{  
-    struct LogicalExpr; 
+{
+    struct LogicalExpr;
     enum class QueryType
     {
         CreateTable,
         CreateIndex,
         Insert,
+        Delete,
+        Update,
         Select,
         Load,
-        Run
+        Run,
+        Show
     };
 
     struct Query
@@ -37,6 +41,16 @@ namespace AST
         GTE,
         ERROR
     };
+    enum class ModifyOp
+    {
+        EQ,
+        ADD,
+        SUB,
+        MUL,
+        DIV,
+        MOD,
+        ERROR
+    };
 
     using string = std::string;
 
@@ -50,23 +64,31 @@ namespace AST
     {
         string value;
     };
-    
 
-    struct ColumnRef 
-    { 
+
+    struct ColumnRef
+    {
         std::string table;
         std::string column;
-    };                                   
+    };
 
-    struct Literal   
-    { 
+    struct Literal
+    {
         string value;
     };
+
+    struct ColumnOpLiteral
+    {
+        string column;
+        ModifyOp op;
+        Literal literal;
+    };
+
     struct exprError{};
 
     using Expr = std::variant<
     ColumnRef, Literal, std::unique_ptr<LogicalExpr>,
-    exprError 
+    exprError
     >;
 
     struct LogicalExpr
@@ -81,8 +103,29 @@ namespace AST
         std::unique_ptr<Expr> root;
     };
 
+    using UpdateExpr = std::variant<
+        Literal,
+        ColumnOpLiteral,
+        exprError
+    >;
 
 
+    struct UpdateArg
+    {
+        string tableName;
+        string column;
+        std::unique_ptr<UpdateExpr> value;
+    };
+
+
+    struct ShowQuery : Query
+    {
+    };
+    struct DeleteQuery: Query
+    {
+        string tableName;
+        Condition condition;
+    };
 
 
     struct CreateTableQuery : Query
@@ -99,6 +142,13 @@ namespace AST
     {
         string tableName;
         std::vector<InsertArg> args;
+    };
+    struct UpdateQuery : Query
+    {
+        string tableName;
+        std::vector<UpdateArg> args;
+        Condition condition;
+
     };
     struct SelectQuery : Query
     {
@@ -121,7 +171,7 @@ namespace AST
         switch(op)
         {
             case Op::EQ:   // ==
-            case Op::NEQ:  
+            case Op::NEQ:
             case Op::LT:   // <
             case Op::GT:   // >
             case Op::LTE:  // <=

@@ -38,13 +38,13 @@ bool BPlusTreeCursor<TreeType>::next() {
 
         if (skip_equals) {
             if (this->key.has_value() && key_equals(this->key.value())) {
-                if (location.key_index + 1 >= location.leaf.current_key_count) {
+                if (location.key_index + 1 >= location.leaf->current_key_count) {
                     return false;
                 }
                 location.key_index++;
-                value = location.leaf.values[location.key_index];
+                value = location.leaf->values[location.key_index];
                 memcpy(current_key.bytes.data(),
-                       location.leaf.keys[location.key_index],
+                       location.leaf->keys[location.key_index],
                        TreeType::KeyLen);
             }
         }
@@ -52,25 +52,46 @@ bool BPlusTreeCursor<TreeType>::next() {
     }
 
     //if last leaf
-    if (location.leaf.next_leaf == 0 && location.key_index + 1 >= location.leaf.current_key_count)
+    if (!delete_on_match && location.leaf->next_leaf == 0 && location.key_index + 1 >= location.leaf->current_key_count)
         return false;
 
     //if at end of current leaf
-    if (location.key_index + 1 >= location.leaf.current_key_count) {
+    if (location.key_index + 1 >= location.leaf->current_key_count) {
         // load next leaf node as pointer
         typename TreeType::NodeType* temp_ptr =
-            tree->file->template load_node<typename TreeType::NodeType>(location.leaf.next_leaf);
+            tree->file->template load_node<typename TreeType::NodeType>(location.leaf->next_leaf);
 
         // copy the leaf node contents into location.leaf
-        location.leaf = *static_cast<typename TreeType::LeafNodeType*>(temp_ptr);
+        location.leaf = static_cast<typename TreeType::LeafNodeType*>(temp_ptr);
 
         location.key_index = -1;
     }
-    location.key_index++;
-    value = location.leaf.values[location.key_index];
+    if(delete_on_match)
+    {
+        if(tree_root != tree->tree_root)
+        {
+            //std::cout << "ROOT CHANGED IN CURSOR FROM: " << tree_root << " TO: " << tree->tree_root << "\n";
+            db->update_root_pointer(*table, tree_root, tree->tree_root);
+            tree_root = tree->tree_root;
+        }
+        if(!set(key))
+        {
+            return false;
+        }
+        //std::cout << "value at index: " << get_value()<< "\n";
+        //if(get_value() == 0)
+        //{
+        //    std::cout << "ERROR VALUE IS 0\n";
+        //}
+    }
+    else
+    {
+        location.key_index++;
+    }
+    value = location.leaf->values[location.key_index];
     current_key.bytes.resize(TreeType::KeyLen);
     memcpy(current_key.bytes.data(),
-           location.leaf.keys[location.key_index],
+           location.leaf->keys[location.key_index],
            TreeType::KeyLen);
 
     return true;
@@ -80,6 +101,7 @@ template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
 {
     tree->root_node = db->file->load_node<typename TreeType::NodeType>(tree_root);
+    tree->table = table;
 
     if (key.has_value()) {
         this->key = key;
@@ -93,11 +115,11 @@ bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
 
     if (location.key_index < 0) return false;
 
-    value = location.leaf.values[location.key_index];
+    value = location.leaf->values[location.key_index];
 
     current_key.bytes.resize(TreeType::KeyLen);
     memcpy(current_key.bytes.data(),
-           location.leaf.keys[location.key_index],
+           location.leaf->keys[location.key_index],
            TreeType::KeyLen);
 
     return true;

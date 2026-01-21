@@ -1,4 +1,5 @@
 #include "planner.hpp"
+#include <cassert>
 
 
 Plan::Plan(const AST::SelectQuery& query)
@@ -15,6 +16,17 @@ Plan::Plan(const AST::SelectQuery& query)
 
     paths.push_back(Path{.tables = query.tableNames, .predicates = {},}); // start with one path
     build_paths(query.condition.root.get(), paths);
+}
+
+Plan::Plan(const std::string &tableName, const AST::Condition &query)
+{
+    if(!query.root)
+    {
+        std::cerr << "Error: Invalid condition expression." << std::endl;
+        return;
+    }
+    paths.push_back(Path{.tables = {tableName}, .predicates = {},}); // start with one path
+    build_paths(query.root.get(), paths);
 }
 
 void Plan::build_paths(AST::Expr* expr, Paths& paths)
@@ -69,7 +81,7 @@ Predicate Plan::make_predicate(AST::Expr* expr)
     //assume parser will always put the column on left
     auto col = std::get<AST::ColumnRef>(*node.left);
 
-    //case literal  
+    //case literal
     if (auto *lit = std::get_if<AST::Literal>(&(*node.right)))
     {
         //column == literal

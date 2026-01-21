@@ -29,8 +29,7 @@ bool Filter::in_range(Output& to_check)
 
         if (columnType == Type::INTEGER) {
             int32_t val;
-            memcpy(&val, token.data(), sizeof(int32_t));
-            //val = ntohl(val);  // convert from big-endian if needed
+            val = stoi(token);  // convert from big-endian if needed
 
             int32_t literal_val = std::stoi(strip_quotes(std::get<LiteralOperand>(pred->right).literal));
 
@@ -102,19 +101,13 @@ void Filter::set_key_on_column(const std::optional<Key>& key, const std::string&
 
 bool Filter::next(Output &output)
 {
-    if(child_->next(output))
+    while (child_->next(output))
     {
         if(in_range(output))
         {
             return true;
         }
-        else 
-        {
-            return next(output);
-        }
     }
-    else
-    {
-        return false;
-    }
+
+    return false;
 }

@@ -35,15 +35,15 @@ struct Data_Node {
     off_t fill_ptr = 0;
     off_t next_free_block = 0;
     off_t overflow = false;
-    
+
     std::byte padding[4072] = {std::byte(0)};
 };
 
 class File {
 public:
-    std::string file_name = "database.db"; 
+    std::string file_name = "database.db";
     int file_fd;
-    status file_status = status::EMPTY; 
+    status file_status = status::EMPTY;
 
     Cache cache;
 
@@ -82,14 +82,14 @@ public:
                                     MyBtree8*  index8,
                                     MyBtree4*  index4);
 
-    template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>    
+    template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>
     void generate_index(int columnIndex, Table& table,
                           MyBtree32* index32,
                           MyBtree16* index16,
                           MyBtree8*  index8,
                           MyBtree4*  index4);
 
-    template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
+    template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>
     std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location, Table &table);
 
 
@@ -100,6 +100,8 @@ public:
 
     template<typename LeafNodeT>
     void update_leafnode(LeafNodeT *node, off_t node_location);
+
+    void update_root_pointer(Table* table, off_t old_location, off_t new_location);
 
     template<typename NodeT>
     NodeT* load_node(off_t disk_offset);
@@ -113,8 +115,11 @@ public:
     off_t insert_table(Table &table);
     std::vector<Table> load_table();
 
+    int update_record(Record &original_record,off_t location, int column_index, std::string &value);
     off_t write_record(Record &record);
     Record get_record(off_t record_location, const Table& table);
+    void delete_record(const Record &record, off_t location, const Table& table);
+
 
 private:
     void header_block_creation();
@@ -134,4 +139,3 @@ private:
 
     Data_Node *load_data_node(off_t location);
 };
-

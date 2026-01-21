@@ -79,7 +79,7 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
         if (*iterator == '(' || *iterator == ')' ||
             *iterator == ',' || *iterator == ';' ||
             *iterator == '[' || *iterator == ']' ||
-            *iterator == '*' || *iterator == '.')   
+            *iterator == '*' || *iterator == '.')
         {
             if (!temp.empty())
             {
@@ -132,9 +132,8 @@ void Lexer::tokenize(const std::string& input_line, std::vector<Token> &TokenLis
         TokenList.push_back(classify_token(temp));
     }
 
-    // Debug output
     // for (const auto& token : TokenList)
     // {
-    //     //std::cout << token.name << " " << TokenTypeToString(token.type) << std::endl;
+    //     std::cout << token.name << " " << TokenTypeToString(token.type) << std::endl;
     // }
 }

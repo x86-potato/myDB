@@ -266,7 +266,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
 
     for (size_t i = 0; i < columnCount; i++)
     {
-        std::cout << query.args[i].value.length();
+        //std::cout << query.args[i].value.length();
         if(query.args[i].value.length() < 1) 
         {
             

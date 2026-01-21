@@ -1,4 +1,8 @@
 #include "parser.hpp"
+#include "ast.hpp"
+#include "tokens.hpp"
+#include <algorithm>
+#include <memory>
 #include <variant>
 namespace ParserNameSpace
 {
@@ -51,9 +55,9 @@ int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
     tempArg.column = iterator.getCurr()->name;
 
 
-    if(iterator.getNext()->type != TokenType::SET)
+    if(iterator.getNext()->type != TokenType::EQUAL)
     {
-        parserError("Expected a set sign");
+        parserError("Expected a equal sign");
         return 1;
     }
 
@@ -112,7 +116,7 @@ int Parser::parseCreateTable(AST::CreateTableQuery *queryAST)
 
 int Parser::parseCreateIndex(AST::CreateIndexQuery *queryAST)
 {
-    
+
     if(iterator.getNext()->type != TokenType::KW_ON)
     {
         parserError("Expected ON keyword");
@@ -132,7 +136,7 @@ int Parser::parseCreateIndex(AST::CreateIndexQuery *queryAST)
     {
         parserError("Expected opening parenthesis");
         return 1;
-        
+
     }
 
 
@@ -150,6 +154,13 @@ int Parser::parseCreateIndex(AST::CreateIndexQuery *queryAST)
     }
 
     return 0;
+}
+
+ParserReturn Parser::parseShow()
+{
+    auto query = std::make_unique<AST::ShowQuery>();
+    query->type = AST::QueryType::Show;
+    return {0, std::move(query)};
 }
 
 ParserReturn Parser::parseCreate()
@@ -176,6 +187,109 @@ ParserReturn Parser::parseCreate()
             return {1, nullptr};
     }
 }
+
+AST::UpdateExpr Parser::parseValue()
+{
+    Token* token = iterator.getNext();
+    switch(token->type)
+    {
+        case TokenType::LITERAL:
+            return AST::Literal{token->name};
+        case TokenType::IDENTIFIER:
+            parserError("not implemented");
+            // return AST::ColumnOpLiteral{token->name};
+            return AST::exprError{};
+        default:
+            parserError("Expected value");
+            return AST::exprError{};
+    }
+}
+
+ParserReturn Parser::parseUpdate()
+{
+    auto query = std::make_unique<AST::UpdateQuery>();
+    query->type = AST::QueryType::Update;
+
+    Token* table = iterator.getNext();
+    if (table->type != TokenType::IDENTIFIER)
+    {
+        parserError("Expected table name");
+        return {1, nullptr};
+    }
+    query->tableName = table->name;
+
+    if (iterator.getNext()->type != TokenType::KW_SET)
+    {
+        parserError("expected a set keyword");
+        return {1, nullptr};
+    }
+    //parse update args
+    while (iterator.getNext()->type != TokenType::KW_WHERE){
+        AST::UpdateArg arg;
+        auto tok = iterator.getCurr();
+        switch(tok->type) {
+            case TokenType::IDENTIFIER:
+                //check if dot follows
+                if (iterator.peeknext()->type == TokenType::PERIOD)
+                {
+                    //save current iterator
+                    std::string lexed_table_name = tok->name;
+                    iterator.getNext();
+                    auto id = iterator.getNext();
+                    if (id->type == TokenType::IDENTIFIER)
+                    {
+                        arg.column = id->name;
+                        arg.tableName = lexed_table_name;
+                    }
+                    parserError("Expected column after .");
+                }
+                //even if no table defined, use the table specifed
+                arg.tableName = query->tableName;
+                arg.column = tok->name;
+                break;
+            default:
+                parserError("Expected identifier");
+                return {1, nullptr};
+        }
+
+        //check if equals follows
+        if (iterator.getNext()->type != TokenType::EQUAL)
+        {
+            parserError("Expected =");
+            return {1, nullptr};
+        }
+        //parse value
+        auto value = parseValue();
+        if(std::get_if<AST::exprError>(&value))
+        {
+            parserError("Expected value");
+            return {1, nullptr};
+        }
+        arg.value = std::make_unique<AST::UpdateExpr>(std::move(value));
+
+        query->args.push_back(std::move(arg));
+    }
+
+    //parse where condition
+    if (iterator.getCurr()->type == TokenType::KW_WHERE)
+    {
+        auto condition = std::make_unique<AST::Condition>();
+        condition->root = parse_expr(0, query->tableName); // precedence-aware parsing
+        if(condition->root == nullptr)
+            return {1, nullptr};
+
+
+        query->condition = std::move(*condition);
+    }
+    else {
+        parserError("Expected WHERE, full table mods not supported");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+
 
 int Parser::parseInsertArgs(AST::InsertQuery* query)
 {
@@ -215,7 +329,7 @@ int Parser::parseInsertArgs(AST::InsertQuery* query)
 
 
 
-ParserReturn Parser::parseInsert() 
+ParserReturn Parser::parseInsert()
 {
     auto query = std::make_unique<AST::InsertQuery>();
     query->type = AST::QueryType::Insert;
@@ -240,7 +354,7 @@ ParserReturn Parser::parseInsert()
         return {1, nullptr};
     }
 
-    int output = parseInsertArgs(query.get()); 
+    int output = parseInsertArgs(query.get());
     //expect semi colon
     if(iterator.getNext()->type != TokenType::SEMICOLON)
     {
@@ -322,7 +436,7 @@ const std::string &table_name) {
     return left;
 }
 
-std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name) 
+std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
 {
     auto tok = iterator.getNext();
     switch(tok->type) {
@@ -331,7 +445,7 @@ std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
             if (iterator.peeknext()->type == TokenType::PERIOD)
             {
                 //save current iterator
-                std::string lexed_table_name = tok->name; 
+                std::string lexed_table_name = tok->name;
                 iterator.getNext();
                 auto id = iterator.getNext();
                 if (id->type == TokenType::IDENTIFIER)
@@ -404,9 +518,9 @@ ParserReturn Parser::parseSelect()
     }
 
 
-        
 
-    
+
+
 
     // expect where or semicolon
 
@@ -494,6 +608,44 @@ ParserReturn Parser::parseRun()
     return {0, std::move(query)};
 }
 
+ParserReturn Parser::parseDelete()
+{
+    auto query = std::make_unique<AST::DeleteQuery>();
+    query->type = AST::QueryType::Delete;
+
+    //expect from keyword
+    if(iterator.getNext()->type != TokenType::KW_FROM)
+    {
+        parserError("Expected from keyword");
+        return {1, nullptr};
+    }
+
+    //expect table name
+    if(iterator.getNext()->type != TokenType::IDENTIFIER)
+    {
+        parserError("Expected table name");
+        return {1, nullptr};
+    }
+    query.get()->tableName = iterator.getCurr()->name;
+
+    //expect where keyword
+    if(iterator.getNext()->type != TokenType::KW_WHERE)
+    {
+        parserError("Expected where keyword");
+        return {1, nullptr};
+    }
+
+    //expect condition
+    auto condition = std::make_unique<AST::Condition>();
+    condition->root = parse_expr(0, query->tableName); // precedence-aware parsing
+    if(condition->root == nullptr)
+        return {1, nullptr};
+
+    query->condition = std::move(*condition);
+
+    return {0, std::move(query)};
+}
+
 ParserReturn Parser::parse(std::vector<Token> &tokenList)
 {
     iterator.tokenList = &tokenList;
@@ -505,13 +657,18 @@ ParserReturn Parser::parse(std::vector<Token> &tokenList)
             return parseCreate();
         case TokenType::KW_INSERT:
             return parseInsert();
+        case TokenType::KW_DELETE:
+            return parseDelete();
+        case TokenType::KW_UPDATE:
+            return parseUpdate();
         case TokenType::KW_SELECT:
-            return parseSelect(); 
+            return parseSelect();
         case TokenType::KW_LOAD:
             return parseLoad();
         case TokenType::KW_RUN:
             return parseRun();
-            return {1, nullptr};
+        case TokenType::KW_SHOW:
+            return parseShow();
         default:
             parserError("No such query exists");
             break;

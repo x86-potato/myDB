@@ -1,5 +1,7 @@
 #include "builder.hpp"
 #include <iomanip>
+#include <iterator>
+#include <variant>
 
 
 //takes a path and turns each prediacte into a relational object
@@ -26,7 +28,7 @@ void Pipeline::build_buckets()
 
     for (const auto& pred : path_.predicates)
     {
-        //scans need to be: literal selection, and indexed 
+        //scans need to be: literal selection, and indexed
         if (pred.predicate_kind == Predicate::PredicateKind::LiteralSelection)
         {
             if(check_if_indexed(pred))
@@ -100,7 +102,7 @@ void Pipeline::sort_buckets()
 
 bool Pipeline::check_if_filter_needed(const std::string &table_name)
 {
-    for (const auto &pred : filter_candidates_) 
+    for (const auto &pred : filter_candidates_)
     {
         if (std::get<ColumnOperand>(pred->left).table == table_name)
         {
@@ -114,7 +116,7 @@ void Pipeline::populate_filter(
     const std::string &table_name,
     Filter &Filter)
 {
-    for (const auto &pred : filter_candidates_) 
+    for (const auto &pred : filter_candidates_)
     {
         if (std::get<ColumnOperand>(pred->left).table == table_name)
         {
@@ -145,7 +147,7 @@ void Pipeline::build_forest()
 {
     for (const auto& table_name : path_.tables)
     {
-        Predicate* scan_predicate = pick_scan_predicate(table_name); 
+        Predicate* scan_predicate = pick_scan_predicate(table_name);
         const Table &table = database_.get_table(table_name);
         auto scan_op = std::make_unique<Scan>(database_, table, scan_predicate);
 
@@ -158,7 +160,7 @@ void Pipeline::build_forest()
             populate_filter(table_name, *filter_op);
 
             forest.push_back(std::move(filter_op));
-            
+
         }
         else
             forest.push_back(std::move(scan_op));
@@ -187,7 +189,7 @@ void Pipeline::compress_forest()
     //compress tree into subtrees
     //assume joins are given
     assert (join_candidates_.size() == forest.size() - 1);
-    while(forest.size() > 1) 
+    while(forest.size() > 1)
     {
         //use first join cnadidate,
         //then pop front of vector
@@ -228,9 +230,9 @@ Pipeline::Pipeline(Path &path, Database& database) :  path_(path), database_(dat
 
     //print_buckets();
 
-     
+
     build_forest();
-    assert (forest.size() != 0); 
+    assert (forest.size() != 0);
 
     compress_forest();
 
@@ -238,12 +240,71 @@ Pipeline::Pipeline(Path &path, Database& database) :  path_(path), database_(dat
     root = std::move(forest[0]);
     forest.clear(); // Clear the forest to avoid any potential issues with moved-from unique_ptrs
 
-    
+}
 
 
-}   
+void Pipeline::ExecuteDelete()
+{
+    Output output;
+    int deleted_count = 0;
+
+    root->delete_on_match = true;
+
+    const Table &table = database_.get_table(path_.tables[0]);
+    while (root->next(output))
+    {
+        database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table);
+        deleted_count++;
+        //std::cout << "Deleted " << deleted_count << " records." << std::endl;
+    }
+    std::cout << "Deleted " << deleted_count << " records." << std::endl;
+}
 
 
+void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
+{
+    //for now assume only one update arg is given
+    Table table = database_.get_table(update_args[0].tableName);
+    int index = table.get_column_index(update_args[0].column);
+
+
+    Output output;
+    int modified_count = 0;
+    while (root->next(output))
+    {
+        switch(table.columns[index].type)
+        {
+            case Type::INTEGER:
+                if(auto arg = std::get_if<AST::Literal>(update_args[0].value.get()))
+                {
+                    std::string value;
+
+                    int32_t number = std::stoi(arg->value);
+                    //uint32_t big_endian = htonl(static_cast<uint32_t>(number));
+
+                    value.append(reinterpret_cast<const char*>(&number), sizeof(number));
+
+
+                    database_.file->update_record(
+                        output.tuples_[0].record,
+                        output.tuples_[0].location,
+                        index, value);
+
+                }
+                else {
+                    std::cerr << "only = literal supported right now";
+                }
+
+                break;
+            default:
+                std::cout << "Unsupported type" << std::endl;
+                //throw std::runtime_error("Unsupported type");
+        }
+        modified_count++;
+    }
+
+    std::cout << "Updated " << modified_count << " records." << std::endl;
+}
 
 
 void Pipeline::Execute()
@@ -251,14 +312,14 @@ void Pipeline::Execute()
     // Calculate column widths based on type
     std::vector<int> column_widths;
     std::vector<std::string> column_headers;
-    
+
     for (const auto& table_name : path_.tables)
     {
         const Table& tbl = database_.get_table(table_name);
         for (const auto& col : tbl.columns) {
             std::string header = table_name + "." + col.name;
             column_headers.push_back(header);
-            
+
             int width;
             switch (col.type) {
                 case Type::INTEGER:
@@ -311,15 +372,15 @@ void Pipeline::Execute()
     print_separator();
 
     Output output;
-
+    int i = 0;
     while (root->next(output))
     {
-        // print all tokens from all tables in a single row
+        i++;
         std::cout << "| ";
         size_t col_idx = 0;
         for (const auto& tuple : output.tuples_)
         {
-            for (const auto& token : tuple.record.to_tokens(*tuple.table_)) 
+            for (const auto& token : tuple.record.to_tokens(*tuple.table_))
             {
                 std::cout << std::left << std::setw(column_widths[col_idx]) << token << " | ";
                 col_idx++;
@@ -330,6 +391,8 @@ void Pipeline::Execute()
 
     // Print bottom border
     print_separator();
+
+    std::cout << "Returned " << i << " records." << std::endl;
 }
 
 

@@ -54,21 +54,21 @@ bool Scan::in_range(const Key& key, const Predicate& pred)
 }
 
 
-Scan::Scan(Database& database,const Table &table, const Predicate *predicate) 
+Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
 : database_(database), table_(table), pred_(predicate) {
     tables_.push_back(&table_);
 
-    if (pred_ == nullptr) 
+    if (pred_ == nullptr)
     {
         mode_ = ScanMode::FULL_SCAN;
-    } 
-    else 
+    }
+    else
     {
         mode_ = ScanMode::INDEX_SCAN;
     }
-    
+
     //assume for literal predicates the left side is always the column name
-    if (mode_ == ScanMode::INDEX_SCAN) 
+    if (mode_ == ScanMode::INDEX_SCAN)
     {
         std::string indexedColumnName = std::get<ColumnOperand>(pred_->left).column;
         std::string key = std::get<LiteralOperand>(pred_->right).literal;
@@ -121,7 +121,7 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
                 throw std::runtime_error("Unsupported operation for index scan");
         }
     }
-    else if (mode_ == ScanMode::FULL_SCAN) 
+    else if (mode_ == ScanMode::FULL_SCAN)
     {
         //get primary index location
         off_t index_location = table.get_column(0).indexLocation;
@@ -152,7 +152,7 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
     }
 
 
-} 
+}
 
 void Scan::reset()
 {
@@ -174,20 +174,21 @@ void Scan::set_key(const std::optional<Key>& key)
 void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& column_name)
 {
     if (!cursor_ || !key.has_value()) return;
-    
+
     // Find the column
     int col_idx = table_.get_column_index(column_name);
     const Column& col = table_.get_column(col_idx);
 
     mode_ = ScanMode::INDEX_SCAN;
     set_by_join = true;
+    cursor_->set_externally = true;
     index_key_ = key.value();
 
-    
+
     if (col.indexLocation == -1) {
         throw std::runtime_error("Column " + column_name + " is not indexed");
     }
-    
+
     // Switch to the correct index for this column
     switch (col.type) {
         case Type::CHAR32:
@@ -205,7 +206,7 @@ void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& c
         default:
             throw std::runtime_error("Unsupported data type for indexed column");
     }
-    
+
     cursor_->tree_root = col.indexLocation;
     cursor_->db = &database_;
     cursor_->set(key);
@@ -213,6 +214,11 @@ void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& c
 
 bool Scan::next(Output &output)
 {
+    if(delete_on_match)
+    {
+        cursor_->delete_on_match = true;
+        cursor_->table = const_cast<Table*>(tables_[0]);
+    }
     output.tuples_.clear();
     if (mode_ == ScanMode::INDEX_SCAN)
     {
@@ -222,7 +228,7 @@ bool Scan::next(Output &output)
             {
                 if (!cursor_->key_equals(index_key_)) {
                     return false;
-                } 
+                }
             }
             else if(!in_range(cursor_->get_key(), *pred_))
             {
@@ -233,7 +239,8 @@ bool Scan::next(Output &output)
 
             off_t record_location = cursor_->get_value();
             OutputTuple output_tuple
-            {.record = database_.file->get_record(record_location, table_), .table_ = &table_};
+            {.record = database_.file->get_record(record_location, table_), .location = record_location, .table_ = &table_};
+
 
 
             output.tuples_.push_back(output_tuple);
@@ -252,20 +259,19 @@ bool Scan::next(Output &output)
     {
         if (cursor_->next())
         {
-            // If a key was set via set_key(), check if current key matches
-            if (cursor_->key.has_value()) {
-                const Key& current_key = cursor_->get_key();
+            //TODO: unkown why this was commented out
+            // If a key was set via set_key(), check if current key matc    hes
+            //if (cursor_->key.has_value()) {
+                //current_key = cursor_->get_key();
 
-                
-            }
-            
+
+                //}
+
             off_t record_location = cursor_->get_value();
             OutputTuple output_tuple
-            {.record = database_.file->get_record(record_location, table_), .table_ = &table_};
+            {.record = database_.file->get_record(record_location, table_), .location = record_location, .table_ = &table_};
             output.tuples_.push_back(output_tuple);
 
-            // std::cout << "Record "<< database_.file->get_record(record_location, table_).str 
-            //           << " located at: " << record_location << " by Scanner\n";
 
             return true;
         }
@@ -275,8 +281,3 @@ bool Scan::next(Output &output)
     return false;
 
 }
-
-
-
-
-

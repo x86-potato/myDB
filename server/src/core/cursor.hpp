@@ -1,20 +1,20 @@
 #pragma once
 #include "../config.h"
+#include "../relational/key.hpp"
 #include "btree.hpp"
 #include "../core/database.hpp"
 #include <optional>
 
 
-struct Key {
-    std::vector<std::byte> bytes;
-};
 
 class TreeCursor {
 public:
     off_t tree_root = 0;
-    const Database* db = nullptr;
+    Database* db = nullptr;
     std::optional<Key> key;
+    Table* table = nullptr;
     bool skip_equals = false;
+    bool delete_on_match = false;
 
     bool set_externally = false;
 

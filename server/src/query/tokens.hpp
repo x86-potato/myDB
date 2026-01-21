@@ -13,6 +13,12 @@ enum class TokenType
     KW_TABLE,
     KW_INDEX,
     KW_ON,
+    KW_BEGIN,
+    KW_UPDATE,
+    KW_COMMIT,
+    KW_ROLLBACK,
+
+
 
     //non sql
     KW_LOAD,
@@ -24,7 +30,7 @@ enum class TokenType
     FLAG_INDEXED,
     FLAG_PRIMARY,
 
-    
+
 
     //types
     CHAR_32,
@@ -33,6 +39,9 @@ enum class TokenType
     INT,
     TEXT,
     BOOL,
+
+    //DELETE
+    KW_DELETE,
 
 
     //SELECT tokens
@@ -46,11 +55,12 @@ enum class TokenType
     //MODIFY tokens
     KW_MODIFY,
     KW_SET,
-    
+
     AND,
     OR,
     LESS_THAN,
     GREATER_THAN,
+    EQUAL,
     EQUALS,
     EQUAL_OR_LESS_THAN,
     EQUAL_OR_GREATER_THAN,
@@ -68,7 +78,7 @@ enum class TokenType
 
 
     //arg tokens
-    LITERAL, 
+    LITERAL,
     IDENTIFIER,
     BOOL_LITERAL,
 
@@ -77,9 +87,8 @@ enum class TokenType
     CLOSING_PARENTHESIS,
     QUOTE,
     SEMICOLON,
-    PERIOD, 
-    COMMA,
-    SET
+    PERIOD,
+    COMMA
 };
 
 struct Token
@@ -102,20 +111,27 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::KW_CREATE:              return "KW_CREATE";
         case TokenType::KW_TABLE:               return "KW_TABLE";
         case TokenType::KW_INDEX:               return "KW_INDEX";
+        case TokenType::KW_DELETE:              return "KW_DELETE";
         case TokenType::KW_ON:                  return "KW_ON";
         case TokenType::KW_SELECT:              return "KW_SELECT";
         case TokenType::KW_RUN:                 return "KW_RUN";
+        case TokenType::KW_UPDATE:              return "KW_UPDATE";
+        case TokenType::KW_SHOW:                return "KW_SHOW";
+
 
         case TokenType::KW_WHERE:               return "KW_WHERE";
         case TokenType::KW_MODIFY:              return "KW_MODIFY";
         case TokenType::KW_SET:                 return "KW_SET";
-        case TokenType::KW_SHOW:                return "KW_SHOW";
         case TokenType::KW_PRAGMA:              return "KW_PRAGMA";
         case TokenType::KW_INFO:                return "KW_INFO";
         case TokenType::KW_INSERT:              return "KW_INSERT";
         case TokenType::KW_INTO:                return "KW_INTO";
         case TokenType::KW_FROM:                return "KW_FROM";
         case TokenType::KW_LOAD:                return "KW_LOAD";
+        case TokenType::KW_BEGIN:               return "KW_BEGIN";
+        case TokenType::KW_COMMIT:              return "KW_COMMIT";
+        case TokenType::KW_ROLLBACK:            return "KW_ROLLBACK";
+
         case TokenType::CHAR_32:                return "CHAR_32";
         case TokenType::CHAR_16:                return "CHAR_16";
         case TokenType::CHAR_8:                 return "CHAR_8";
@@ -132,6 +148,7 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::OR:                     return "OR";
         case TokenType::LESS_THAN:              return "LESS_THAN";
         case TokenType::GREATER_THAN:           return "GREATER_THAN";
+        case TokenType::EQUAL:                  return "EQUAL";
         case TokenType::EQUALS:                 return "EQUALS";
         case TokenType::EQUAL_OR_LESS_THAN:     return "EQUAL_OR_LESS_THAN";
         case TokenType::EQUAL_OR_GREATER_THAN:  return "EQUAL_OR_GREATER_THAN";
@@ -148,7 +165,6 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::SEMICOLON:              return "SEMICOLON";
         case TokenType::COMMA:                  return "COMMA";
         case TokenType::PERIOD:                 return "PERIOD";
-        case TokenType::SET:                    return "SET";
     }
     return "UNKNOWN";
 }
@@ -161,12 +177,22 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"from",    TokenType::KW_FROM},
         {"on",      TokenType::KW_ON},
         {"select",  TokenType::KW_SELECT},
+        {"update",  TokenType::KW_UPDATE},
+        {"delete",  TokenType::KW_DELETE},
+        {"set",     TokenType::KW_SET},
+        {"show",    TokenType::KW_SHOW},
+
         {"where",   TokenType::KW_WHERE},
         {"run",      TokenType::KW_RUN},
+        {"begin",    TokenType::KW_BEGIN},
+        {"commit",      TokenType::KW_COMMIT},
+        {"rollback",      TokenType::KW_ROLLBACK},
+
+
+
 
         {"*", TokenType::ASTERISK},
         {"modify",  TokenType::KW_MODIFY},
-        {"set",     TokenType::KW_SET},
         {"show",    TokenType::KW_SHOW},
         {"pragma",  TokenType::KW_PRAGMA},
         {"info",    TokenType::KW_INFO},
@@ -194,7 +220,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {";",       TokenType::SEMICOLON},
         {",",       TokenType::COMMA},
         {".",       TokenType::PERIOD},
-        {"=",       TokenType::SET},
+        {"=",       TokenType::EQUAL},
 
         {"<",       TokenType::LESS_THAN},
         {">",       TokenType::GREATER_THAN},

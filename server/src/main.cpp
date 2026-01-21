@@ -17,6 +17,7 @@
 
 
 #include <chrono>
+#include <thread>
 
 
 
@@ -31,10 +32,15 @@ int main()
     Executor executor(database);
     CLI cli(executor);
 
+    std::thread wal_worker(&Cache::WAL, std::ref(database.file->cache)); // Start WAL thread
+
+    wal_worker.detach(); // Detach the thread to run independently
+
     cli.run();          // Starts the interactive CLI loop
 
     database.flush();   // Save any pending data on exit
+
+    wal_worker.join(); // Ensure WAL thread has finished before exiting
     return 0;
 }
-
 

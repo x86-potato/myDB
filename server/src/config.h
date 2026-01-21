@@ -6,7 +6,7 @@
 
 
 
-constexpr int CACHE_PAGE_LIMIT = 150000;
+constexpr int CACHE_PAGE_LIMIT = 300000;
 constexpr double CACHE_GB_LIMIT = CACHE_PAGE_LIMIT * 4096.0 / (1024.0 * 1024.0 * 1024.0); // in GB
 constexpr size_t PAGE_SIZE = 4096;
 

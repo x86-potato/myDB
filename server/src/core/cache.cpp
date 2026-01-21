@@ -90,6 +90,11 @@ void Cache::write_to_page(Page* page, size_t offset, const void* src, size_t len
     if (node) node->dirty = true;
 }
 
+void Cache::WAL()
+{
+
+}
+
 void Cache::flush_cache()
 {
     std::cout << "\nhits:" << cache_hit_counter << " misses: " << cache_miss_counter; 

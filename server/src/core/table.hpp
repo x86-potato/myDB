@@ -4,14 +4,15 @@
 #include <vector>
 
 #include "../config.h"
+#include "../storage/record.hpp"
 
 //TYPE defines the type of key that is per column,
-//STRING is NOT indexable, must be 
+//STRING is NOT indexable, must be
 //all indexable columns must be static sized
 
-enum class Type 
+enum class Type
 {
-    CHAR32, 
+    CHAR32,
     CHAR16,
     CHAR8,
     INTEGER,
@@ -22,8 +23,8 @@ enum class Type
 
 namespace TypeUtil {
     Type string_to_type(std::string &check);
-    std::string type_to_string(Type &check);
-    int type_len(Type &check);
+    std::string type_to_string(const Type &check);
+    int type_len(const Type &check);
 }
 
 
@@ -43,7 +44,7 @@ struct Table {
     Table();
     Table(std::byte* data, int len);
 
-    int primaryLen();
+    int primaryLen() const;
 
     void table_print();
 

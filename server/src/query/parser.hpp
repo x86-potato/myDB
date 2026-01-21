@@ -45,12 +45,17 @@ private:
 
     std::unique_ptr<AST::Expr> parse_primary(const std::string& table_name);
     std::unique_ptr<AST::Expr> parse_expr(int min_prec,const std::string& table_name);
+    AST::UpdateExpr parseValue();
 
+    ParserReturn parseShow();
     ParserReturn parseCreate();
     ParserReturn parseInsert();
+    ParserReturn parseUpdate();
     ParserReturn parseSelect();
+    ParserReturn parseDelete();
     ParserReturn parseLoad();
     ParserReturn parseRun();
+
 
 public:
     Parser();

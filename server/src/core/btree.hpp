@@ -7,6 +7,7 @@
 
 #include "../config.h"
 #include "../storage/file.hpp"
+#include "../core/table.hpp"
 
 
 template<size_t KeySize, size_t MaxKeys>
@@ -47,7 +48,7 @@ using LeafNode4 = LeafNode<4, MaxKeys_4>;
 template<typename LeafNodeT>
 struct LocationData
 {
-    LeafNodeT leaf;
+    LeafNodeT* leaf;
     int key_index;
 };
 
@@ -61,6 +62,7 @@ public:
     using InternalNodeType = InternalNodeT;
     NodeT* root_node = nullptr;
     File *file = nullptr;
+    Table* table = nullptr;
 
     off_t tree_root = 0;
     static constexpr int MaxKeys= []() {
@@ -70,7 +72,7 @@ public:
         else if constexpr (std::is_same_v<NodeT, Node32>) return MaxKeys_32;
         else return -1; // fallback
     }();
-    
+
     static constexpr int KeyLen= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return 8;
         else if constexpr (std::is_same_v<NodeT, Node4>) return 4;
@@ -86,12 +88,12 @@ public:
     };
     BtreePlus();
     BtreePlus(File *file);
-    
+
     //@brief insertes string a and corresponding value b
     void insert(std::string insert_string, off_t &record_location);
 
     //@brief deletes a key and its value
-    void delete_key(std::string delete_string);
+    void delete_key(std::string delete_string, off_t record_location);
 
 
     LocationData<LeafNodeType> locate(std::string key);
@@ -100,11 +102,11 @@ public:
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string);
-    
+
     //@brief checks if the tree contains a certian key
     bool has_key(const std::string &key);
 
-    //@brief prints current objects tree, assumes roo_node is defined and loaded 
+    //@brief prints current objects tree, assumes roo_node is defined and loaded
     void print_tree();
 
     //@brief creates the first node and loads it to the cache.
@@ -125,14 +127,14 @@ private:
     bool attempt_borrow(NodeT *current, InternalNodeT *parent, int currents_child_index);
     void borrow_left_leaf(NodeT* current, NodeT* left);
     void borrow_right_leaf(NodeT* current, NodeT* right);
-    
+
     //----------handle insertion----------------
     void insert_up_into(Insert_Up_Data data,off_t node_location);
     void split_leaf(NodeT* node);
     void split_internal(NodeT* node);
     void insert_key_into_node(Insert_Up_Data data, NodeT* node);
     void push_into_internal(InternalNodeT* target, char* value);
-    
+
     //----------utill functions----------------
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);

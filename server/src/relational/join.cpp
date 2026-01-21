@@ -41,21 +41,23 @@ bool Join::next(Output &output)
 
             // Reset right child for the new left row
             Key k;
-            k.bytes.resize(left_value_.size());
+            k.bytes.resize(4);
 
             std::string right_col = std::get<ColumnOperand>(join_predicate_->right).column;
-            Type right_col_type = right_table_.get_column(right_col).type;
-            // copy bytes in reverse order
-            for (size_t i = 0; i < left_value_.size(); ++i) {   
-                k.bytes[i] = static_cast<std::byte>(left_value_[left_value_.size() - 1 - i]);
-            }
 
+            //assume its integer for now
+            int32_t number = std::stoi(left_value_);
+            uint32_t big_endian = htonl(static_cast<uint32_t>(number));
+            std::memcpy(k.bytes.data(), &big_endian, 4);
+
+            std::string left_col = std::get<ColumnOperand>(join_predicate_->left).column;
             right_child_->set_key_on_column(k, right_col);
             has_left_record_ = true;
         }
 
         // Try to fetch next right row
         Output right_output;
+
         if (right_child_->next(right_output)) {
             const Record &right_record = right_output.get_single_record(right_table_.name);
             std::string right_value = const_cast<Record&>(right_record).get_token(
@@ -67,8 +69,8 @@ bool Join::next(Output &output)
             if (left_value_ == right_value) {
                 // Produce one joined tuple
                 output.tuples_.clear();
-                output.tuples_.push_back({*current_left_record_, &left_table_});
-                output.tuples_.push_back({right_record, &right_table_});
+                output.tuples_.push_back({*current_left_record_, left_output_.tuples_[0].location, &left_table_});
+                output.tuples_.push_back({right_record, right_output.tuples_[0].location, &right_table_});
                 return true;
             }
 
@@ -80,4 +82,3 @@ bool Join::next(Output &output)
         }
     }
 }
-

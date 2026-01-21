@@ -5,4 +5,6 @@
 /server/obj/*
 /server/bin/*
 /server/users.csv
+/server/products.csv
+/server/orders.csv
 

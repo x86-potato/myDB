@@ -3,8 +3,6 @@
 
 Executor::Executor (Database &database) : database(database)
 {
-
-
 }
 
 
@@ -28,13 +26,22 @@ void Executor::execute (const std::string &input)
                 static_cast<AST::CreateTableQuery*>(queryAST.get())
             );
             break;
-            
         case AST::QueryType::Insert:
             execute_insert(
                 static_cast<AST::InsertQuery*>(queryAST.get())
             );
             break;
-            
+        case AST::QueryType::Delete:
+            execute_delete(
+                static_cast<AST::DeleteQuery*>(queryAST.get())
+            );
+            break;
+        case AST::QueryType::Update:
+            execute_update(
+                static_cast<AST::UpdateQuery*>(queryAST.get())
+            );
+            break;
+
         case AST::QueryType::Select:
             //AST::print_select_query_tree(
             //    *(static_cast<AST::SelectQuery*>(queryAST.get()))
@@ -47,21 +54,50 @@ void Executor::execute (const std::string &input)
             execute_load(
                 static_cast<AST::LoadQuery*>(queryAST.get())
             );
-            break;        
+            break;
         case AST::QueryType::Run:
             execute_run(
                 static_cast<AST::RunQuery*>(queryAST.get())
             );
-            break;    
+            break;
         case AST::QueryType::CreateIndex:
             execute_create_index(
                 static_cast<AST::CreateIndexQuery*>(queryAST.get())
             );
             break;
-            
+        case AST::QueryType::Show:
+            execute_show(
+                static_cast<AST::ShowQuery*>(queryAST.get())
+            );
+            break;
+
     }
 }
 
+void Executor::execute_show(AST::ShowQuery* query) {
+    if (database.tableMap.empty()) {
+        std::cout << "No tables.\n";
+        return;
+    }
+
+    for (const auto& [tableName, table] : database.tableMap) {
+        std::cout << "\n" << tableName << ":\n";
+
+        for (const auto& col : table.columns) {
+            std::cout << "  " << std::setw(18) << std::left << col.name
+                      << std::setw(10) << TypeUtil::type_to_string(const_cast<Type&>(col.type));
+
+            if (col.indexLocation > 0) {
+                std::cout << " [indexed]";
+            } else if (col.indexLocation == -1) {
+                std::cout << " [no-index]";
+            }
+
+            std::cout << "\n";
+        }
+    }
+    std::cout << "\n";
+}
 void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     if (validateCreateIndexQuery(*query, database) == false)
     {
@@ -87,7 +123,7 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     }
 
     std::cout << "Generating index for column " << query->column << " in table " << query->tableName << std::endl;
-    
+
 
     database.file->generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(columnIndex, table,
         &database.index_tree32,
@@ -97,7 +133,24 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     );
 }
 
+void Executor::execute_update(AST::UpdateQuery* query) {
 
+    Plan plan(query->tableName, query->condition);
+
+    if(plan.paths.size() == 0)
+    {
+        Path temp = Path{};
+        Pipeline plan_executor(temp, database);
+
+        plan_executor.ExecuteUpdate(query->args);
+    }
+    else
+    {
+        Pipeline plan_executor(plan.paths[0], database);
+
+        plan_executor.ExecuteUpdate(query->args);
+    }
+}
 
 void Executor::execute_select(AST::SelectQuery* query) {
     //AST::print_select_query_tree(*query);
@@ -112,7 +165,7 @@ void Executor::execute_select(AST::SelectQuery* query) {
 
     if(plan.paths.size() == 0)
     {
-        Path temp = Path{}; 
+        Path temp = Path{};
         Pipeline plan_executor(temp, database);
 
         plan_executor.Execute();
@@ -123,7 +176,6 @@ void Executor::execute_select(AST::SelectQuery* query) {
 
         plan_executor.Execute();
     }
-
 }
 
 void Executor::execute_load(AST::LoadQuery* query) {
@@ -142,6 +194,7 @@ void Executor::execute_load(AST::LoadQuery* query) {
 
     std::string line;
     int lineNumber = 0;
+    int successCount = 0;
 
     // Skip the first line (header)
     std::getline(file, line);
@@ -165,17 +218,20 @@ void Executor::execute_load(AST::LoadQuery* query) {
             value.erase(value.find_last_not_of(" \t\r\n") + 1);
 
 
-            
+
             values.push_back(value);
         }
 
         // Insert the row into the database
-        database.insert(query->tableName, values);
+        if(database.insert(query->tableName, values) == 0)
+        {
+            successCount++;
+        }
 
     }
 
     file.close();
-    std::cout << "Successfully loaded " << (lineNumber - 1) << " rows into table " 
+    std::cout << "Successfully loaded " << successCount << " rows into table "
               << query->tableName << std::endl;
 }
 
@@ -188,7 +244,7 @@ void Executor::execute_create_table(AST::CreateTableQuery* query) {
     //if here, the query is valid and may be applied to database with no chance of conflict
     Table newTable;
     newTable.name = query->tableName;
-    
+
     for (auto& arg : query->args)
     {
         Type type = TypeUtil::string_to_type(arg.type);
@@ -202,13 +258,14 @@ void Executor::execute_create_table(AST::CreateTableQuery* query) {
 }
 
 void Executor::execute_insert(AST::InsertQuery* query) {
+    //converting to a transactional model
     if (validateInsertQuery(*query, database) == false)
     {
         return;
     }
 
     StringVec values;
-    
+
     for (auto &arg: query->args)
     {
         values.push_back(arg.value);
@@ -217,7 +274,18 @@ void Executor::execute_insert(AST::InsertQuery* query) {
     std::string tableName = query->tableName;
 
     database.insert(tableName, values);
+}
 
+void Executor::execute_delete(AST::DeleteQuery* query) {
+    //TODO: Implement delete query validation, also for update
+    //if (validateDeleteQuery(*query, database) == false)
+    //{
+    //    return;
+    //}
+
+    std::string tableName = query->tableName;
+
+    database.erase(tableName, query->condition);
 }
 
 void Executor::execute_run(AST::RunQuery* query) {
@@ -238,18 +306,18 @@ void Executor::execute_run(AST::RunQuery* query) {
     // Parse multiple queries separated by semicolons
     size_t start = 0;
     size_t end = content.find(';');
-    
+
     while (end != std::string::npos) {
         std::string query_str = content.substr(start, end - start);
-        
+
         // Trim whitespace
         query_str.erase(0, query_str.find_first_not_of(" \t\r\n"));
         query_str.erase(query_str.find_last_not_of(" \t\r\n") + 1);
-        
+
         if (!query_str.empty()) {
             execute(query_str + ";");
         }
-        
+
         start = end + 1;
         end = content.find(';', start);
     }

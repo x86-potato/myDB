@@ -1,18 +1,29 @@
 #pragma once
 #include <memory>
+#include <vector>
 #include "../../config.h"
 #include "../../relational/operations.hpp"
+#include <variant>
 #include "planner.hpp"
 
+class Operator;
+class Filter;
+class Scan;
+class Join;
 
 class Pipeline
 {
 public:
     Pipeline(Path &path, Database& database);
 
+    void ExecuteDelete();
+    void ExecuteUpdate(std::vector<AST::UpdateArg> &update_args);
     void Execute();
 
+
     std::unique_ptr<Operator> root;
+
+    // std::vector<AST::UpdateArg> *update_args;
 
     std::vector<std::unique_ptr<Operator>> forest;
 

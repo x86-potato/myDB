@@ -1,0 +1,3 @@
+refactor secondary index generation: use new cursor tool
+
+implement filter

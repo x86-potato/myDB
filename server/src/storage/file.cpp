@@ -1,7 +1,8 @@
 #include "file.hpp"
 #include "../core/database.hpp"
+#include <algorithm>
 
-File::File() 
+File::File()
 {
     index_block_count = 0;
     data_blocks_count = 0;
@@ -9,7 +10,7 @@ File::File()
 
     struct stat st;
     stat(file_name.c_str(), &st);
-    
+
     if (open_file() != 1)
     {
         if(st.st_size > 0)
@@ -19,32 +20,32 @@ File::File()
         else
         {
             file_status = status::EMPTY;
-        } 
+        }
     }
-    
+
     cache.filefd = file_fd;
 
     if (file_status == EMPTY)
     {
-        
+
         header_pointer = alloc_block();
 
         header_block_creation();
 
-        
-        
-        std::cout << "table block,root node, root data: "<< table_block_pointer << " " << free_data_pointer << std::endl;
+
+
+        //std::cout << "table block,root node, root data: "<< table_block_pointer << " " << free_data_pointer << std::endl;
 
         //primary_table = load_table();
     }
     else
     {
         header_pointer = 0;
-        
+
         table_block_pointer = get_table_block();
         free_data_pointer = get_data();
 
-        std::cout << "table block,root node, root data: "<< table_block_pointer   << " " << free_data_pointer << std::endl;
+        //std::cout << "table block,root node, root data: "<< table_block_pointer   << " " << free_data_pointer << std::endl;
 
     }
 }
@@ -53,10 +54,10 @@ File::File()
 template <typename MyBtree>
 off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree, Table &table)
 {
-    
+
     using NodeT = typename MyBtree::NodeType;
 
-    NodeT *loaded_node = load_node<NodeT>(table.columns[0].indexLocation); 
+    NodeT *loaded_node = load_node<NodeT>(table.columns[0].indexLocation);
 
     tree.root_node = loaded_node;
     tree.tree_root = table.columns[0].indexLocation;
@@ -84,54 +85,13 @@ off_t File::insert_primary_index(std::string key,Record &record, MyBtree &tree, 
     return record_location;
 }
 
-// template <typename PrimaryTree>
-// void File::parse_primary_tree(PrimaryTree &tree)
-//{
-    
-//     using PrimaryNodeT = typename PrimaryTree::NodeType;
-//     using PrimaryLeafNodeT = typename PrimaryTree::LeafNodeType;
-//     using PrimaryInternalNodeT = typename PrimaryTree::InternalNodeType;
-
-//     PrimaryNodeT *node = load_node<PrimaryNodeT>(primary_table.columns[0].indexLocation);
-//     std::string type;
-//     PrimaryInternalNodeT* internal_node_cast;
-
-//     while (!node->is_leaf)    
-//     {
-//         internal_node_cast = static_cast<PrimaryInternalNodeT*>(node);
-//         node = load_node<PrimaryNodeT>(internal_node_cast->children[0]);
-//     }
-
-//     //here we reach the left most node
-//     PrimaryLeafNodeT* node_cast = static_cast<PrimaryLeafNodeT*>(node);
-
-//     //allocate the root
-
-
-//     while (node_cast)
-//     {
-//         for (int i = 0; i < node_cast->current_key_count; i++)
-//         {
-//             //record_locations.push_back(node_cast->values[i]);
-//         }
-//         off_t next_leaf = node_cast->next_leaf;
-//         if(next_leaf == 0)
-//             node_cast = nullptr;
-//         else
-//         {
-//             node = load_node<PrimaryNodeT>(next_leaf);
-//             node_cast = static_cast<PrimaryLeafNodeT*>(node);
-//         }
-//     }
-
-// }
 
 template <typename MyBtree>
 void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index)
 {
     using NodeT = typename MyBtree::NodeType;
     off_t root = table.columns[column_index].indexLocation;
-    NodeT *loaded_node = load_node<NodeT>(root); 
+    NodeT *loaded_node = load_node<NodeT>(root);
     //if(loaded_node->disk_location == 0) tree.init_root(root);
 
     tree.root_node = loaded_node;
@@ -174,7 +134,6 @@ void File::build_secondary_index(Table& table, int columnIndex,
 
             std::string key = record.get_token(columnIndex, table);
             Type secondaryKeyType = table.columns[columnIndex].type;
-            off_t index_location = table.columns[columnIndex].indexLocation;
 
             //std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << std::endl;
             // Dispatch to the correct secondary B+Tree
@@ -239,24 +198,20 @@ void File::generate_index(int columnIndex, Table& table,
 
     // Dispatch primary type and build secondary index on demand
     switch (table.columns[0].type) {
-        case Type::INTEGER: 
-            //index4->tree_root = table.columns[columnIndex].indexLocation;
+        case Type::INTEGER:
             build_secondary_index<MyBtree4>
             (table, columnIndex, index4, index32, index16, index8, index4); break;
-        case Type::CHAR32:  
-            //index32->tree_root = table.columns[columnIndex].indexLocation;
+        case Type::CHAR32:
             build_secondary_index<MyBtree32>
             (table, columnIndex, index32, index32, index16, index8, index4); break;
-        case Type::CHAR16:  
-            //index16->tree_root = table.columns[columnIndex].indexLocation;
+        case Type::CHAR16:
             build_secondary_index<MyBtree16>
             (table, columnIndex, index16, index32, index16, index8, index4); break;
-        case Type::CHAR8:   
-            //index8->tree_root = table.columns[columnIndex].indexLocation;
+        case Type::CHAR8:
             build_secondary_index<MyBtree8>
             (table, columnIndex, index8, index32, index16, index8, index4); break;
         default:
-            std::cerr << "Type not supported for indexing\n";   
+            std::cerr << "Type not supported for indexing\n";
             return;
     }
 }
@@ -265,7 +220,7 @@ void File::generate_index(int columnIndex, Table& table,
 
 
 
-template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>    
+template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>
 std::vector<Record> File::find(std::string key, MyBtree &index_tree, off_t root_location, Table &table)
 {
     std::vector<Record> output;
@@ -313,6 +268,22 @@ void File::update_leafnode(LeafNodeT *node, off_t node_location)
     cache.write_to_page(page,0,node,BLOCK_SIZE, node_location);
 
 }
+void File::update_root_pointer(Table* table,off_t old_location, off_t new_location)
+{
+    //table = &database->get_table("users");
+    //std::cout << "updating root pointer from " << old_location << " to " << new_location << "\n";
+    for(size_t i =0; i < table->columns.size(); i++)
+    {
+        if(table->columns[i].indexLocation == old_location)
+        {
+            table->columns[i].indexLocation = new_location;
+            return;
+        }
+    }
+
+
+}
+
 
 template<typename NodeT>
 NodeT* File::load_node(off_t disk_offset) {
@@ -339,14 +310,14 @@ void File::print_leaves(off_t disk_node_offset)
     type = "\ninternal: ";
     if(node->is_leaf)
         type = "\nleaf: ";
-    
+
     std::cout << type << disk_node_offset << " keys: \n";
     for (int i = 0; i < node->current_key_count; i++)
     {
         std::cout << node->keys[i] << " ";
     }
     std::cout << std::endl;
-    if (!node->is_leaf)    
+    if (!node->is_leaf)
     {
         InternalNodeT* node_cast = static_cast<InternalNodeT*>(node);
         for (int i = 0; i < node->current_key_count+1; i++)
@@ -356,9 +327,9 @@ void File::print_leaves(off_t disk_node_offset)
                 print_leaves<BtreeT>(node_cast->children[i]);
             }
         }
-        
+
     }
-    else 
+    else
     {
         LeafNodeT* node_cast = static_cast<LeafNodeT*>(node);
         for (int i = 0; i < node->current_key_count; i++)
@@ -486,7 +457,7 @@ off_t File::insert_table(Table &table)
 
     // serialize table
     std::vector<std::byte> casted_table = cast_to_bytes(&table);
-    
+
     currentTableCount++;
     cache.write_to_page(page, 0, &currentTableCount, sizeof(currentTableCount), table_block_pointer);
     cache.write_to_page(page, writeOffset, casted_table.data(), casted_table.size(), table_block_pointer);
@@ -545,7 +516,7 @@ void File::header_block_creation()
     memcpy(&temp_header[0],&table_block_pointer,8);
 
     init_table_block(table_block_pointer);
-    
+
     //set root data node pointer
     free_data_pointer = this->alloc_block();
     memcpy(&temp_header[8],&free_data_pointer,8);
@@ -565,7 +536,7 @@ void File::init_node(off_t location)
     NodeT node;
     node.disk_location = location;
     node.is_leaf = true;
-    
+
     File::update_node(&node, location, sizeof(NodeT));
 
 }
@@ -580,8 +551,10 @@ void File::init_data_node(off_t location)
 
     memcpy(page->buffer, &data,sizeof(data));
 
-    cache.write_block(location);
-}    
+    cache.write_to_page(page,0,&data,sizeof(data), location);
+
+    //cache.write_block(location);
+}
 
 void File::init_table_block(off_t location)
 {
@@ -616,7 +589,6 @@ off_t File::get_root_node()
 
     off_t output = 0;
 
-    //std::cout.write(reinterpret_cast<char*>(buffer),8); std::cout << std::flush;
     memcpy(&output, &page->buffer[8], 8);
 
     return output;
@@ -644,7 +616,7 @@ int File::open_file()
         exit(1);
     }
 
-    
+
     close(fd);
 
     // Reopen with O_DIRECT for direct I/O reads/writes
@@ -660,8 +632,8 @@ int File::open_file()
         std::cerr << "couldnt open file_fd \n";
         return 1;
     }
-    
-    
+
+
 
     return 0;
 
@@ -681,7 +653,7 @@ Record File::get_record(off_t record_location, const Table& table)
 
     return record;
 
-} 
+}
 
 // @brief returns location of the new record
 off_t File::write_record(Record &record)
@@ -693,7 +665,7 @@ off_t File::write_record(Record &record)
     off_t record_location = 0;
     int space_left = 4072 - node->fill_ptr;
 
-    
+
 
     if(space_left > record.length)
     {
@@ -734,15 +706,71 @@ off_t File::write_record(Record &record)
         cache.write_to_page(header_page, HEADER_ROOT_DATA_LOCATION, &free_data_pointer, 8, 0);
 
     }
-    
-    
+
+
     return record_location;
-    
+
 }
 
+//@this must only be called on a column index that is static, or new value is same size as old value
+int File::update_record(Record &original_record,off_t location, int column_index, std::string& value)
+{
+    off_t block_address = (location / BLOCK_SIZE) * BLOCK_SIZE;
 
 
 
+
+    original_record.update_column(column_index, value, database->get_table("users"));
+
+
+    Page* page = cache.read_block(block_address);
+
+    cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
+
+    return location;
+}
+
+void File::delete_record(const Record &record, off_t location, const Table& table)
+{
+
+
+    //first we clear out the secondary keys it may have
+    int column_index = 0;
+    for (auto& index : table.columns)
+    {
+        if (index.indexLocation != -1)
+        {
+            off_t block_address = (index.indexLocation/ BLOCK_SIZE) * BLOCK_SIZE;
+
+            std::string key = record.get_token(column_index, table);
+
+            switch (index.type)
+            {
+                case Type::INTEGER:
+                {
+                    int v = stoi(key);
+                    v = ntohl(v);
+                    std::string key(reinterpret_cast<const char*>(&v), 4);
+                    database->index_tree4.tree_root = block_address;
+                    database->index_tree4.delete_key(key, location);
+                    break;
+                }
+                case Type::CHAR32:
+                    break;
+                case Type::CHAR16:
+                    break;
+                case Type::CHAR8:
+                    break;
+
+                default:
+                    throw std::runtime_error("Unsupported column type");
+            }
+        }
+
+        column_index++;
+    }
+
+}
 
 Data_Node *File::load_data_node(off_t location)
 {
@@ -751,7 +779,7 @@ Data_Node *File::load_data_node(off_t location)
     // Use page->buffer so we don't alias the Page object and corrupt cache internals
     Data_Node *temp_node = reinterpret_cast<Data_Node*>(page->buffer);
 
-    //todo: edge 
+    //todo: edge
     return temp_node;
 }
 
@@ -804,5 +832,3 @@ template std::vector<Record> File::find<MyBtree32, Node32, InternalNode32,LeafNo
 template std::vector<Record> File::find<MyBtree16, Node16, InternalNode16,LeafNode16>(std::string, MyBtree16&, off_t, Table&);
 template std::vector<Record> File::find<MyBtree8, Node8, InternalNode8,LeafNode8>(std::string, MyBtree8&, off_t, Table&);
 template std::vector<Record> File::find<MyBtree4, Node4, InternalNode4, LeafNode4>(std::string, MyBtree4&, off_t, Table&);
-
-

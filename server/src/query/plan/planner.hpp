@@ -62,7 +62,8 @@ public:
     using Paths = std::vector<Path>;
     Paths paths;
 
-    explicit Plan(const AST::SelectQuery& query);
+    Plan(const AST::SelectQuery& query);
+    Plan(const std::string& tableName, const AST::Condition& query);
 
     void build_paths(AST::Expr* expr, Paths& paths);
     Predicate make_predicate(AST::Expr* expr);

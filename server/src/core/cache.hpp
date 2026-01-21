@@ -28,6 +28,8 @@ struct NodeLRU
     bool dirty = false;
 };
 
+
+
 class Cache
 {
 public:
@@ -47,6 +49,9 @@ public:
     Page* insert(off_t block_offset);
 
     void write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset);
+
+    void WAL();
+
     void flush_cache();
 
 private:
