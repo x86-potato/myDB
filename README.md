@@ -453,16 +453,6 @@ While WAL transaction handling is not fully implemented, read-query performance 
 
 ---
 
-## 📚 References
-
-* *Database Systems: The Complete Book* — Garcia-Molina, Ullman, Widom
-* *Database Management Systems* — Ramakrishnan, Gehrke
-* SQLite source code
-* PostgreSQL planner documentation
-* Academic papers on query optimization
-
-
----
 
 **Built with**: C++17, GNU Make, Python
 **Platform**: Linux (POSIX APIs, mmap, pread/pwrite)
