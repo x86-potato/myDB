@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@ namespace TypeUtil {
 struct Column {
     std::string name;
     Type type;
+    uint32_t row_count = 0;
     off_t indexLocation = -1; //0 if not created yet, -1 if not indexable
     Column();
     Column(std::string name, Type type);

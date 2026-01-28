@@ -277,15 +277,18 @@ void Executor::execute_insert(AST::InsertQuery* query) {
 }
 
 void Executor::execute_delete(AST::DeleteQuery* query) {
-    //TODO: Implement delete query validation, also for update
-    //if (validateDeleteQuery(*query, database) == false)
-    //{
-    //    return;
-    //}
+    if (validateDeleteQuery(*query, database) == false)
+    {
+       return;
+    }
+    Plan plan(query->tableName, query->condition);
+    if (validatePlan(plan, database) == false)
+    {
+       return;
+    }
 
-    std::string tableName = query->tableName;
-
-    database.erase(tableName, query->condition);
+    const std::string &tableName = query->tableName;
+    database.erase(tableName, plan);
 }
 
 void Executor::execute_run(AST::RunQuery* query) {

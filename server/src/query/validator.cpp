@@ -61,7 +61,7 @@ int indexOfColumn(const std::string& name, const Table &table)
             return int(i);
     }
     return -1; //return -1 if not found at all
-    
+
 }
 bool checkIfTableContainsColumn(const Table& table, const std::string& columnName)
 {
@@ -79,7 +79,7 @@ bool validateLiteralSelectionPredicate(const Predicate& predicate, const Databas
 {
     //case where users.id == literal
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
-    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    if (db.tableMap.find(left_table) == db.tableMap.end())
     {
         std::string output = std::string("Table " + left_table + " does not exist!");
         throwError(output.c_str());
@@ -97,19 +97,19 @@ bool validateLiteralSelectionPredicate(const Predicate& predicate, const Databas
 bool validateColumnSelectionPredicate(const Predicate& predicate, const Database &db)
 {
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
-    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    if (db.tableMap.find(left_table) == db.tableMap.end())
     {
         std::string output = std::string("Table " + left_table + " does not exist!");
         throwError(output.c_str());
         return false;
     }
     auto right_table = std::get<ColumnOperand>(predicate.right).table;
-    if (db.tableMap.find(right_table) == db.tableMap.end()) 
+    if (db.tableMap.find(right_table) == db.tableMap.end())
     {
         std::string output = std::string("Table " + right_table + " does not exist!");
         throwError(output.c_str());
         return false;
-    }   
+    }
     if (left_table != right_table)
     {
         std::string output = std::string("In multi-table filter, both columns cannot be from the same table " + left_table);
@@ -135,19 +135,19 @@ bool validateColumnSelectionPredicate(const Predicate& predicate, const Database
 bool validateJoinPredicate(const Predicate& predicate, const Database &db)
 {
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
-    if (db.tableMap.find(left_table) == db.tableMap.end()) 
+    if (db.tableMap.find(left_table) == db.tableMap.end())
     {
         std::string output = std::string("Table " + left_table + " does not exist!");
         throwError(output.c_str());
         return false;
     }
     auto right_table = std::get<ColumnOperand>(predicate.right).table;
-    if (db.tableMap.find(right_table) == db.tableMap.end()) 
+    if (db.tableMap.find(right_table) == db.tableMap.end())
     {
         std::string output = std::string("Table " + right_table + " does not exist!");
         throwError(output.c_str());
         return false;
-    }   
+    }
 
     if (left_table == right_table)
     {
@@ -173,12 +173,12 @@ bool validateJoinPredicate(const Predicate& predicate, const Database &db)
 
 
 
-//first we only 
+//first we only
 bool validatePlan(const Plan& plan, const Database &db)
 {
     for (auto &path: plan.paths)
     {
-        
+
         if(path.predicates.size() == 0)
             return true;
         for (auto &predicate: path.predicates)
@@ -208,7 +208,7 @@ bool validatePlan(const Plan& plan, const Database &db)
 bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database &db)
 {
     // check if table name like this even exists
-    if(db.tableMap.find(query.tableName) == db.tableMap.end()) 
+    if(db.tableMap.find(query.tableName) == db.tableMap.end())
     {
         throwError("This table does not exist!");
         return false;
@@ -241,7 +241,7 @@ bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database
 
 bool validateChar(const std::string &str, size_t typelen)
 {
-    if(str.length() < 3) return false; 
+    if(str.length() < 3) return false;
     if(str[0] != '"' || str[str.length()-1] != '"') return false;
     if(str.length()-2 > typelen) return false;
     return true;
@@ -250,7 +250,7 @@ bool validateChar(const std::string &str, size_t typelen)
 bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
 {
     // check if table name like this even exists
-    if(db.tableMap.find(query.tableName) == db.tableMap.end()) 
+    if(db.tableMap.find(query.tableName) == db.tableMap.end())
     {
         throwError("This table does not exist!");
         return false;
@@ -267,16 +267,16 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
     for (size_t i = 0; i < columnCount; i++)
     {
         //std::cout << query.args[i].value.length();
-        if(query.args[i].value.length() < 1) 
+        if(query.args[i].value.length() < 1)
         {
-            
+
             std::string output = std::string("column " +
-            db.tableMap.at(query.tableName).columns[i].name + 
+            db.tableMap.at(query.tableName).columns[i].name +
             " given value is too short");
             throwError(output.c_str());
             return false;
         }
-        
+
         //switch thru the in memory table structure
         switch (db.tableMap.at(query.tableName).columns[i].type)
         {
@@ -285,7 +285,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
             {
                 if(!validateChar(query.args[i].value, 32)) {
                     std::string output = std::string("column " +
-                    db.tableMap.at(query.tableName).columns[i].name + 
+                    db.tableMap.at(query.tableName).columns[i].name +
                     " expects no more than 32 chars");
                     throwError(output.c_str());
                     return false;
@@ -296,7 +296,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
             {
                 if(!validateChar(query.args[i].value,16)) {
                     std::string output = std::string("column " +
-                    db.tableMap.at(query.tableName).columns[i].name + 
+                    db.tableMap.at(query.tableName).columns[i].name +
                     " expects no more than 16 chars");
                     throwError(output.c_str());
                     return false;
@@ -307,7 +307,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
             {
                 if(!validateChar(query.args[i].value, 8)) {
                     std::string output = std::string("column " +
-                    db.tableMap.at(query.tableName).columns[i].name + 
+                    db.tableMap.at(query.tableName).columns[i].name +
                     " expects no more than 8 chars");
                     throwError(output.c_str());
                     return false;
@@ -319,7 +319,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
                 if(!validateInt(query.args[i].value))
                 {
                     std::string output = std::string("column " +
-                    db.tableMap.at(query.tableName).columns[i].name + 
+                    db.tableMap.at(query.tableName).columns[i].name +
                     " expects a valid integer type");
                     throwError(output.c_str());
                     return false;
@@ -331,7 +331,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
                 if(query.args[i].value != "true" && query.args[i].value != "false")
                 {
                     std::string output = std::string("column " +
-                    db.tableMap.at(query.tableName).columns[i].name + 
+                    db.tableMap.at(query.tableName).columns[i].name +
                     " expects a valid boolean type");
                     throwError(output.c_str());
                     return false;
@@ -354,7 +354,7 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
 bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database &db)
 {
     //check if table of that name exists
-    if(db.tableMap.find(query.tableName) != db.tableMap.end()) 
+    if(db.tableMap.find(query.tableName) != db.tableMap.end())
     {
         throwError("Table of this name already exists!");
         return false;
@@ -365,7 +365,7 @@ bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database
     {
         throwError("Table name too short!");
         return false;
-    } 
+    }
     //check if enough args given
     if(query.args.size() == 0)
     {
@@ -395,6 +395,18 @@ bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database
         }
     }
 
+
+
+    return true;
+}
+bool validateDeleteQuery(const AST::DeleteQuery &query, const Database &db)
+{
+    //check if table of that name exists
+    if(db.tableMap.find(query.tableName) == db.tableMap.end())
+    {
+        throwError("Table of this name does not exist!");
+        return false;
+    }
 
 
     return true;

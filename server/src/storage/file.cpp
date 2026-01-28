@@ -96,7 +96,88 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
     tree.root_node = loaded_node;
     tree.tree_root = root;
-    tree.insert(key,record_location);
+
+    LocationData<typename MyBtree::LeafNodeType> location = tree.locate(key);
+
+    //check if the the key has already been inserted
+    if(location.key_index != -1)
+    {
+        //check if a posting list exists
+        off_t found_block = location.leaf->values[location.key_index];
+        if (found_block % 4096 == 0 && found_block != 0)
+        {
+            //insert into posting list
+
+            Posting_Block block = load_posting_block(found_block);
+            //if the first block is full, need to create a new posting block
+            if(block.size == 509)
+            {
+                //traverse to the end of the posting list
+                while (block.next != 0)
+                {
+                    found_block = block.next;
+                    block = load_posting_block(found_block);
+                }
+                if(block.size < 509)
+                {
+                    block.size++;
+                    block.entries[block.size - 1] = record_location;
+                    update_posting_block(found_block, block);
+                    return;
+                }
+                off_t new_block_location = alloc_block();
+                init_posting_block(new_block_location);
+
+                Posting_Block new_block = load_posting_block(new_block_location);
+                new_block.size = 1;
+                new_block.entries[0] = record_location;
+
+                //link the new block
+                block.next = new_block_location;
+
+                update_posting_block(found_block, block);
+                update_posting_block(new_block_location, new_block);
+                return;
+            }
+
+            block.size++;
+            block.entries[block.size - 1] = record_location;
+
+            // for (int i = 0; i < block.size; i++)
+            // {
+            //     //std::cout << "Entry: " << get_record(block.entries[i], table).to_tokens(table)[column_index] << std::endl;
+            // }
+
+
+            update_posting_block(found_block, block);
+            //update_node(location.leaf, location.leaf->disk_location, 4096);
+        }
+        else
+        {
+            //create posting list
+            off_t block_location = alloc_block();
+            init_posting_block(block_location);
+
+            //add previous posting list to new posting list
+            Posting_Block block = load_posting_block(block_location);
+
+            block.size = 2;
+            block.entries[0] = location.leaf->values[location.key_index];
+            block.entries[1] = record_location;
+
+            //add new posting list to leaf node
+            location.leaf->values[location.key_index] = block_location;
+
+            update_posting_block(block_location, block);
+            update_node(location.leaf, location.leaf->disk_location, 4096);
+        }
+    }
+    else
+    {
+        tree.insert(key,record_location);
+        update_node<typename MyBtree::NodeType>(tree.root_node, tree.tree_root, sizeof(typename MyBtree::InternalNodeType));
+    }
+
 
 
 
@@ -140,15 +221,15 @@ void File::build_secondary_index(Table& table, int columnIndex,
             switch (secondaryKeyType) {
                 case Type::INTEGER:
                 {
-                    if (key.size() != 4) throw std::runtime_error("Key must be 4 bytes");
 
                     uint32_t little_endian_val;
-                    std::memcpy(&little_endian_val, key.data(), 4);
+                    little_endian_val = stoi(key);
 
                     // Convert to big endian
                     uint32_t big_endian_val = htonl(little_endian_val);
 
                     std::string int_key(reinterpret_cast<const char*>(&big_endian_val), 4);
+                    if (int_key.size() != 4) throw std::runtime_error("Key must be 4 bytes");
                     insert_secondary_index(int_key, table, *index4, record_location, columnIndex);
                     break;
                 }
@@ -280,8 +361,29 @@ void File::update_root_pointer(Table* table,off_t old_location, off_t new_locati
             return;
         }
     }
+}
+void File::delete_from_posting_list(off_t posting_block_location, off_t record_location)
+{
+    Posting_Block block = load_posting_block(posting_block_location);
 
+    auto it = std::find(block.entries, block.entries + block.size, record_location);
+    if (it != block.entries + block.size) {
+        std::move(it + 1, block.entries + block.size, it);
+        block.size--;
 
+        update_posting_block(posting_block_location, block);
+    }
+
+    if(block.size == 0)
+    {
+        //delete posting block
+        Freed_Block freed_block;
+        freed_block.next_free_block = free_data_pointer;
+        free_data_pointer = posting_block_location;
+
+        Page* page = cache.read_block(posting_block_location);
+        cache.write_to_page(page, 0, &freed_block, sizeof(Freed_Block), posting_block_location);
+    }
 }
 
 
@@ -573,6 +675,32 @@ void File::init_table_block(off_t location)
 
 }
 
+void File::init_posting_block(off_t location)
+{
+    Page* page = cache.read_block(location);
+
+    char temp[16] = {0};
+
+    cache.write_to_page(page, 0, temp, 12, table_block_pointer);
+}
+
+Posting_Block File::load_posting_block(off_t location)
+{
+    Page* page = cache.read_block(location);
+
+    Posting_Block block;
+    memcpy(&block, page->buffer, sizeof(Posting_Block));
+
+    return block;
+}
+
+void File::update_posting_block(off_t location, Posting_Block &block)
+{
+    Page* page = cache.read_block(location);
+
+    cache.write_to_page(page, 0, &block, 4096, location);
+}
+
 off_t File::get_table_block()   //FIX
 {
     Page* page = cache.read_block(header_pointer);
@@ -743,6 +871,7 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
             off_t block_address = (index.indexLocation/ BLOCK_SIZE) * BLOCK_SIZE;
 
             std::string key = record.get_token(column_index, table);
+            bool is_primary_column = (column_index == 0);
 
             switch (index.type)
             {
@@ -756,10 +885,19 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
                     break;
                 }
                 case Type::CHAR32:
+                    assert(key.size() <= 32);
+                    database->index_tree4.tree_root = block_address;
+                    database->index_tree4.delete_key(key, location);
                     break;
                 case Type::CHAR16:
+                    assert(key.size() <= 16);
+                    database->index_tree4.tree_root = block_address;
+                    database->index_tree4.delete_key(key, location);
                     break;
                 case Type::CHAR8:
+                    assert(key.size() <= 8);
+                    database->index_tree4.tree_root = block_address;
+                    database->index_tree4.delete_key(key, location);
                     break;
 
                 default:
@@ -782,6 +920,8 @@ Data_Node *File::load_data_node(off_t location)
     //todo: edge
     return temp_node;
 }
+
+
 
 template off_t File::insert_table<Node32, Node16, Node8, Node4>(Table&);
 template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int, Table&,

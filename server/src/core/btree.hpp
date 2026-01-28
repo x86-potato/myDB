@@ -138,6 +138,7 @@ private:
     //----------utill functions----------------
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
+    off_t get_next_leftmost_node_pointer(char* to_search,InternalNodeT *node);
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth, std::ostream& out);
     int get_underflow_amount();

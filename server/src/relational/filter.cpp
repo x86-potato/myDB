@@ -17,7 +17,7 @@ bool Filter::in_range(Output& to_check)
     for (const auto& pred : predicates_)
     {
         std::string column_name = std::get<ColumnOperand>(pred->left).column;
-        
+
         const Type columnType = table_.get_column(column_name).type;
 
         int column_index = table_.get_column_index(column_name);
@@ -35,55 +35,47 @@ bool Filter::in_range(Output& to_check)
 
             switch (pred->op)
             {
-                case AST::Op::EQ:  
-                    if (!(val == literal_val)) return false; 
+                case AST::Op::EQ:
+                    if (!(val == literal_val)) return false;
                     break;
-                case AST::Op::LT:  
-                    if (!(val < literal_val)) return false; 
+                case AST::Op::LT:
+                    if (!(val < literal_val)) return false;
                     break;
-                case AST::Op::LTE: 
-                    if (!(val <= literal_val)) return false; 
+                case AST::Op::LTE:
+                    if (!(val <= literal_val)) return false;
                     break;
-                case AST::Op::GT:  
-                    if (!(val > literal_val)) return false; 
+                case AST::Op::GT:
+                    if (!(val > literal_val)) return false;
                     break;
-                case AST::Op::GTE: 
-                    if (!(val >= literal_val)) return false; 
+                case AST::Op::GTE:
+                    if (!(val >= literal_val)) return false;
                     break;
-                default: 
+                default:
                     throw std::runtime_error("Unsupported operation in in_range");
             }
-        } 
+        }
         else {
             // CHAR/TEXT columns: compare strings
-            std::string literal_str = strip_quotes(std::get<LiteralOperand>(pred->right).literal);
-            int cmp = token.compare(literal_str);
+            std::string literal_val = strip_quotes(std::get<LiteralOperand>(pred->right).literal);
+            Key literal_key = make_index_key(literal_val, columnType);
+            Key compare_key = make_index_key(token, columnType);
+
+            int cmp = token.compare(literal_val);
 
             switch (pred->op)
             {
-                case AST::Op::EQ:  
-                    if (!(cmp == 0)) return false; 
-                    break;
-                case AST::Op::LT:  
-                    if (!(cmp < 0)) return false; 
-                    break;
-                case AST::Op::LTE: 
-                    if (!(cmp <= 0)) return false; 
-                    break;
-                case AST::Op::GT:  
-                    if (!(cmp > 0)) return false; 
-                    break;
-                case AST::Op::GTE: 
-                    if (!(cmp >= 0)) return false; 
-                    break;
-                default: 
-                    throw std::runtime_error("Unsupported operation in in_range");
+                case AST::Op::EQ:  return cmp == 0;
+                case AST::Op::LT:  return cmp < 0;
+                case AST::Op::LTE: return cmp <= 0;
+                case AST::Op::GT:  return cmp > 0;
+                case AST::Op::GTE: return cmp >= 0;
+                default: throw std::runtime_error("Unsupported operation in in_range");
             }
-        } 
+        }
     }
 
     return true;
-    
+
 }
 
 void Filter::reset()

@@ -135,14 +135,8 @@ int Database::insert(const std::string& tableName, const StringVec& args)
     return 0;
 }
 
-int Database::erase(const std::string& tableName, const AST::Condition &condition)
+int Database::erase(const std::string& tableName, Plan& plan)
 {
-
-    Plan plan(tableName, condition);
-    if (validatePlan(plan, *this) == false)
-    {
-       return 1;
-    }
 
     if (plan.paths.size() == 0) return 1;
 
@@ -156,17 +150,6 @@ int Database::erase(const std::string& tableName, const AST::Condition &conditio
 
     return 1;
 }
-
-
-
-//int Database::select(const std::string& tableName, const StringVec& args)
-//{
-//    //Table &table = tableMap.at(tableName);
-//
-//    return 0;
-//}
-
-
 
 
 void Database::update_index_location(Table &table, int column_index, off_t new_index_location)

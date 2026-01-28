@@ -53,7 +53,7 @@ class Operator
 public:
     virtual ~Operator() = default;
 
-    bool delete_on_match = false; 
+    bool delete_on_match = false;
 
     std::vector<const Table*> tables_;
     virtual bool next(Output &output) = 0;
@@ -89,6 +89,11 @@ private:
     Key index_key_;
     bool set_by_join = false;
     ScanMode mode_;
+    
+    bool on_secondary_index_ = false;
+    Posting_Block current_posting_block_;
+    size_t posting_block_index_ = -1;
+
 
 
 
@@ -175,8 +180,26 @@ inline Key make_index_key(const std::string& literal, Type columnType)
         }
 
         case Type::CHAR8:
+        {
+            std::string s = strip_quotes(literal);
+            k.bytes.resize(8);
+            memcpy(k.bytes.data(), s.data(), s.size());
+            break;
+        }
         case Type::CHAR16:
+        {
+            std::string s = strip_quotes(literal);
+            k.bytes.resize(16);
+            memcpy(k.bytes.data(), s.data(), s.size());
+            break;
+        }
         case Type::CHAR32:
+        {
+            std::string s = strip_quotes(literal);
+            k.bytes.resize(32);
+            memcpy(k.bytes.data(), s.data(), s.size());
+            break;
+        }
         case Type::TEXT:
         {
             std::string s = strip_quotes(literal);

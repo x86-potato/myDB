@@ -16,4 +16,4 @@ bool validatePlan(const Plan& plan, const Database &db);
 bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database &db);
 bool validateInsertQuery(const AST::InsertQuery &query, const Database &db);
 bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database &db);
-
+bool validateDeleteQuery(const AST::DeleteQuery &query, const Database &db);

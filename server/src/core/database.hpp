@@ -37,5 +37,5 @@ public:
     void update_index_location(Table &table, int column_index, off_t new_index_location);
     void update_root_pointer(Table &table, off_t old_root, off_t new_root);
     int insert(const std::string& tableName, const StringVec& args);
-    int erase(const std::string& tableName, const AST::Condition &condition);
+    int erase(const std::string& tableName, Plan &plan);
 };

@@ -212,72 +212,102 @@ void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& c
     cursor_->set(key);
 }
 
-bool Scan::next(Output &output)
+bool Scan::next(Output& output)
 {
-    if(delete_on_match)
-    {
-        cursor_->delete_on_match = true;
-        cursor_->table = const_cast<Table*>(tables_[0]);
-    }
     output.tuples_.clear();
-    if (mode_ == ScanMode::INDEX_SCAN)
+
+    if(mode_ == ScanMode::INDEX_SCAN)
     {
-        if (cursor_->next())
+        while (true)
         {
-            if (set_by_join)
+            // 1. Still iterating a posting list
+            if (posting_block_index_ != -1)
             {
-                if (!cursor_->key_equals(index_key_)) {
-                    return false;
+                if (posting_block_index_ < current_posting_block_.size)
+                {
+                    off_t record_location =
+                        current_posting_block_.entries[posting_block_index_++];
+
+                    output.tuples_.push_back({
+                        .record = database_.file->get_record(record_location, table_),
+                        .location = record_location,
+                        .table_ = &table_
+                    });
+
+                    return true;
+                }
+                if(current_posting_block_.next == 0)
+                {
+                    //end of posting list
+                    posting_block_index_ = -1;
+                    continue;
+                }
+                else
+                {
+                    //load next posting block
+                    current_posting_block_ =
+                        database_.file->load_posting_block(current_posting_block_.next);
+                    posting_block_index_ = 0;
+                    continue;
                 }
             }
-            else if(!in_range(cursor_->get_key(), *pred_))
+
+            // 2. Advance index cursor
+            if (!cursor_->next())
+                return false;
+
+            // 3. Range / join predicate checks
+            if (set_by_join)
+            {
+                if (!cursor_->key_equals(index_key_))
+                    return false;
+            }
+            else if (!in_range(cursor_->get_key(), *pred_))
             {
                 return false;
             }
 
+            off_t value = cursor_->get_value();
 
+            // 4. Posting list entry
+            if (value % 4096 == 0)
+            {
+                Posting_Block block =
+                    database_.file->load_posting_block(value);
 
-            off_t record_location = cursor_->get_value();
-            OutputTuple output_tuple
-            {.record = database_.file->get_record(record_location, table_), .location = record_location, .table_ = &table_};
+                current_posting_block_ = block;
+                posting_block_index_ = 0;
 
+                continue;   // do not emit yet
+            }
 
-
-            output.tuples_.push_back(output_tuple);
-
-            // std::cout << "Record "<< database_.file->get_record(record_location, table_).str << " located at: " << record_location << " by Scanner\n";
-
+            // 5. Normal single record
+            output.tuples_.push_back({
+                .record = database_.file->get_record(value, table_),
+                .location = value,
+                .table_ = &table_
+            });
 
             return true;
-        }
-        else
-        {
-            return false;
         }
     }
     else
     {
-        if (cursor_->next())
+        //full scan mode
+        while (true)
         {
-            //TODO: unkown why this was commented out
-            // If a key was set via set_key(), check if current key matc    hes
-            //if (cursor_->key.has_value()) {
-                //current_key = cursor_->get_key();
+            if (!cursor_->next())
+                return false;
 
+            off_t value = cursor_->get_value();
 
-                //}
-
-            off_t record_location = cursor_->get_value();
-            OutputTuple output_tuple
-            {.record = database_.file->get_record(record_location, table_), .location = record_location, .table_ = &table_};
-            output.tuples_.push_back(output_tuple);
-
+            output.tuples_.push_back({
+                .record = database_.file->get_record(value, table_),
+                .location = value,
+                .table_ = &table_
+            });
 
             return true;
         }
-
     }
-
-    return false;
-
 }

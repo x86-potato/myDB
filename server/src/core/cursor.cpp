@@ -106,8 +106,10 @@ bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
     if (key.has_value()) {
         this->key = key;
         normalize_key(this->key.value(), TreeType::KeyLen);
-
-        std::string lookup = std::string(reinterpret_cast<const char*>(this->key->bytes.data()), this->key->bytes.size());
+        std::string lookup(
+            reinterpret_cast<const char*>(this->key->bytes.data()),
+            this->key->bytes.size()
+        );
         location = tree->locate(lookup);
     } else {
         location = tree->locate_start();

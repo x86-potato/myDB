@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <iomanip>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,12 @@
 
 class Database;
 
+enum class BlockType : uint8_t {
+    INTERNAL_NODE,
+    LEAF_NODE,
+    DATA_NODE
+};
+
 enum status {
     EMPTY,
     READY
@@ -38,6 +45,24 @@ struct Data_Node {
 
     std::byte padding[4072] = {std::byte(0)};
 };
+
+struct Posting_Block
+{
+    off_t next = 0;
+    off_t prev = 0;
+    uint32_t size = 0;
+
+    off_t entries[510];
+
+};
+
+struct Freed_Block
+{
+    off_t next_free_block;
+    BlockType original_type;
+};
+
+
 
 class File {
 public:
@@ -120,6 +145,7 @@ public:
     Record get_record(off_t record_location, const Table& table);
     void delete_record(const Record &record, off_t location, const Table& table);
 
+    Posting_Block load_posting_block(off_t location);
 
 private:
     void header_block_creation();
@@ -129,6 +155,10 @@ private:
     void init_node(off_t location);
 
     void init_data_node(off_t location);
+
+    void init_posting_block(off_t location);
+    void update_posting_block(off_t location, Posting_Block &block);
+    void delete_from_posting_list(off_t posting_block_location, off_t record_location);
 
     off_t get_table_block();
     off_t get_root_node();
