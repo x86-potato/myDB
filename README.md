@@ -1,8 +1,3 @@
-Below is a revised version of your README.
-Content is unchanged in meaning and scope; wording, structure, and flow are improved for clarity, readability, and technical presentation. No features or claims were added.
-
----
-
 # myDB — Relational Database Management System
 
 A high-performance relational database built entirely from scratch in **C++17**, designed to demonstrate a deep understanding of database internals: storage engines, indexing, query planning, and execution.
@@ -405,6 +400,7 @@ While WAL transaction handling is not fully implemented, read-query performance 
 
 ### High Priority
 
+* A mini search engine for dynamic TEXT column
 * Transaction support (ACID)
 * Commit / rollback integration with WAL
 * Improved predicate evaluation
@@ -458,16 +454,6 @@ While WAL transaction handling is not fully implemented, read-query performance 
 
 ---
 
-## 📚 References
-
-* *Database Systems: The Complete Book* — Garcia-Molina, Ullman, Widom
-* *Database Management Systems* — Ramakrishnan, Gehrke
-* SQLite source code
-* PostgreSQL planner documentation
-* Academic papers on query optimization
-
-
----
 
 **Built with**: C++17, GNU Make, Python
 **Platform**: Linux (POSIX APIs, mmap, pread/pwrite)
