@@ -80,25 +80,33 @@ bool Filter::in_range(Output& to_check)
 
 void Filter::reset()
 {
-    child_->reset();
+    child_->reset_and_skip();
 }
-void Filter::set_key(const std::optional<Key>& key)
+void Filter::set_key(const Key& key)
 {
     child_->set_key(key);
 }
-void Filter::set_key_on_column(const std::optional<Key>& key, const std::string& column_name)
+void Filter::set_key_on_column(const Key& key, const std::string& column_name)
 {
     child_->set_key_on_column(key, column_name);
 }
+void Filter::reset_and_skip()
+{
+}
+
 
 bool Filter::next(Output &output)
 {
+    int calls = 0;
     while (child_->next(output))
     {
         if(in_range(output))
         {
+            calls_since_output = calls; 
+            //std::cout << "Filter passing after " << calls << " calls\n";
             return true;
         }
+        calls++;
     }
 
     return false;

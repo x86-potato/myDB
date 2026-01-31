@@ -15,7 +15,11 @@ void Join::reset()
     has_left_record_ = false;
 }
 
-void Join::set_key(const std::optional<Key>& key)
+void Join::reset_and_skip()
+{
+}
+
+void Join::set_key(const Key& key)
 {
     left_child_->set_key(key);
     right_child_->set_key(key);

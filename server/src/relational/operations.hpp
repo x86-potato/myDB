@@ -1,6 +1,5 @@
 #pragma once
 #include <memory>
-#include <optional>
 #include <arpa/inet.h>
 #include "../storage/record.hpp"
 #include "key.hpp"
@@ -54,14 +53,18 @@ public:
     virtual ~Operator() = default;
 
     bool delete_on_match = false;
+    Key last_deleted_key;
 
     std::vector<const Table*> tables_;
     virtual bool next(Output &output) = 0;
 
     virtual void reset() = 0;
+    virtual void reset_and_skip() = 0;
 
-    virtual void set_key(const std::optional<Key>& key) = 0;
-    virtual void set_key_on_column(const std::optional<Key>& key, const std::string& column_name);
+    virtual void set_key(const Key& key) = 0;
+    virtual void set_key_on_column(const Key& key, const std::string& column_name);
+
+    void update_last_deleted_key(const Key& key);
 };
 
 
@@ -69,6 +72,7 @@ public:
 enum class ScanMode {
     INDEX_SCAN,
     FULL_SCAN,
+    SECONDARY_INDEX_SCAN,
     FULL_SCAN_WITH_PREDICATE
 };
 
@@ -78,8 +82,10 @@ public:
 
     bool next(Output &output) override;
     void reset() override;
-    void set_key(const std::optional<Key>& key) override;
-    void set_key_on_column(const std::optional<Key>& key, const std::string& column_name) override;
+    void set_key(const Key& key) override;
+    void set_key_on_column(const Key& key, const std::string& column_name) override;
+
+    void reset_and_skip() override;
 
 private:
     Database& database_;
@@ -88,11 +94,13 @@ private:
     const Predicate* pred_;
     Key index_key_;
     bool set_by_join = false;
+    bool started = false;
     ScanMode mode_;
     
     bool on_secondary_index_ = false;
     Posting_Block current_posting_block_;
     size_t posting_block_index_ = -1;
+    int posting_block_reads = 0;
 
 
 
@@ -111,16 +119,20 @@ public:
 
     void add_predicate(const Predicate* pred);
 
+    Key last_key_;
+
     bool next(Output &output) override;
     void reset() override;
-    void set_key(const std::optional<Key>& key) override;
-    void set_key_on_column(const std::optional<Key>& key, const std::string& column_name) override;
+    void set_key(const Key& key) override;
+    void set_key_on_column(const Key& key, const std::string& column_name) override;
+    void reset_and_skip() override;
 
 private:
     Database& database_;
     const Table& table_;
     std::unique_ptr<Operator> child_;
 
+    int calls_since_output = 0;
 
     std::vector<const Predicate*> predicates_;
 
@@ -141,7 +153,8 @@ public:
 
     bool next(Output &output) override;
     void reset() override;
-    void set_key(const std::optional<Key>& key) override;
+    void set_key(const Key& key) override;
+    void reset_and_skip() override;
 
 private:
     Database& database_;

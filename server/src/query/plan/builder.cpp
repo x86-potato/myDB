@@ -251,10 +251,13 @@ void Pipeline::ExecuteDelete()
     root->delete_on_match = true;
 
     const Table &table = database_.get_table(path_.tables[0]);
+
     while (root->next(output))
     {
         database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table);
         deleted_count++;
+
+        root->reset();
         //std::cout << "Deleted " << deleted_count << " records." << std::endl;
     }
     std::cout << "Deleted " << deleted_count << " records." << std::endl;

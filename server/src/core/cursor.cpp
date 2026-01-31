@@ -25,105 +25,130 @@ off_t BPlusTreeCursor<TreeType>::get_value() const
 
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::next() {
-    if (!started && set_externally) {
-        // If set externally but not started, do not advance
-        started = true;
-        return true;
-    }
-    if (!started) {
-        // Not positioned yet: position once using existing key (or start)
-        started = true;
 
-        if (!set(key)) return false;
-
-        if (skip_equals) {
-            if (this->key.has_value() && key_equals(this->key.value())) {
-                if (location.key_index + 1 >= location.leaf->current_key_count) {
-                    return false;
-                }
-                location.key_index++;
-                value = location.leaf->values[location.key_index];
-                memcpy(current_key.bytes.data(),
-                       location.leaf->keys[location.key_index],
-                       TreeType::KeyLen);
-            }
+    location.key_index++; 
+    if(location.key_index >= location.leaf->current_key_count) 
+    {
+        if(location.leaf->next_leaf == 0) 
+        {
+            return false; // end of tree
+        } 
+        else 
+        {
+            //load next 
+            location.leaf = static_cast<typename TreeType::LeafNodeType*>(
+                tree->file->template load_node<typename TreeType::NodeType>(
+                location.leaf->next_leaf
+                )
+            );
+            leaves_read++;
+            location.key_index = 0;
         }
-        return true;
     }
 
-    //if last leaf
-    if (!delete_on_match && location.leaf->next_leaf == 0 && location.key_index + 1 >= location.leaf->current_key_count)
+
+    //update current key and value
+    update_key_and_value(); 
+
+    //commit_progress();
+    return true;
+
+}
+
+
+template <typename TreeType>
+void BPlusTreeCursor<TreeType>::skip_read_leaves()
+{
+    int target_skip = std::max(0, leaves_read - 1);
+    int skipped = 0;
+
+    //std::cout << "Skipping " << target_skip << " leaves\n";
+
+    while (skipped < target_skip && location.leaf->next_leaf != 0)
+    {
+        location.leaf = static_cast<typename TreeType::LeafNodeType*>(
+            tree->file->template load_node<typename TreeType::NodeType>(
+                location.leaf->next_leaf
+            )
+        );
+        location.key_index = 0;
+        skipped++;
+    }
+
+    //can never skip to the end
+    assert(location.leaf->next_leaf != 0);
+    leaves_read -= 2;
+
+
+}
+
+template <typename TreeType>
+void BPlusTreeCursor<TreeType>::commit_progress()
+{
+    if(leaves_read == 0)
+        return;
+    leaves_commited += leaves_read - 1;
+    leaves_read = std::max(0, leaves_commited);
+
+}
+
+template <typename TreeType>
+bool BPlusTreeCursor<TreeType>::set_start()
+{
+    tree->tree_root = this->tree_root;
+
+    tree->root_node =
+        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+
+
+
+    location = tree->locate_start();
+    if (location.key_index == -1)
+    {
         return false;
-
-    //if at end of current leaf
-    if (location.key_index + 1 >= location.leaf->current_key_count) {
-        // load next leaf node as pointer
-        typename TreeType::NodeType* temp_ptr =
-            tree->file->template load_node<typename TreeType::NodeType>(location.leaf->next_leaf);
-
-        // copy the leaf node contents into location.leaf
-        location.leaf = static_cast<typename TreeType::LeafNodeType*>(temp_ptr);
-
-        location.key_index = -1;
     }
-    if(delete_on_match)
-    {
-        if(tree_root != tree->tree_root)
-        {
-            //std::cout << "ROOT CHANGED IN CURSOR FROM: " << tree_root << " TO: " << tree->tree_root << "\n";
-            db->update_root_pointer(*table, tree_root, tree->tree_root);
-            tree_root = tree->tree_root;
-        }
-        if(!set(key))
-        {
-            return false;
-        }
-        //std::cout << "value at index: " << get_value()<< "\n";
-        //if(get_value() == 0)
-        //{
-        //    std::cout << "ERROR VALUE IS 0\n";
-        //}
-    }
-    else
-    {
-        location.key_index++;
-    }
-    value = location.leaf->values[location.key_index];
-    current_key.bytes.resize(TreeType::KeyLen);
-    memcpy(current_key.bytes.data(),
-           location.leaf->keys[location.key_index],
-           TreeType::KeyLen);
+
+    update_key_and_value();
 
     return true;
 }
 
-template <typename TreeType>
-bool BPlusTreeCursor<TreeType>::set(const std::optional<Key>& key)
-{
-    tree->root_node = db->file->load_node<typename TreeType::NodeType>(tree_root);
-    tree->table = table;
 
-    if (key.has_value()) {
-        this->key = key;
-        normalize_key(this->key.value(), TreeType::KeyLen);
-        std::string lookup(
-            reinterpret_cast<const char*>(this->key->bytes.data()),
-            this->key->bytes.size()
-        );
-        location = tree->locate(lookup);
-    } else {
-        location = tree->locate_start();
+template <typename TreeType>
+bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
+{
+    tree->tree_root = this->tree_root;
+    tree->root_node =
+        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+
+    Key k = key;
+    normalize_key(k, TreeType::KeyLen);
+    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen));
+    if (location.key_index == -1)
+    {
+        return false;
     }
 
-    if (location.key_index < 0) return false;
+    update_key_and_value();
+    return true;
+}
+template <typename TreeType>
+bool BPlusTreeCursor<TreeType>::set_gt(const Key &key)
+{
+    tree->tree_root = this->tree_root;
+    tree->root_node =
+        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
 
-    value = location.leaf->values[location.key_index];
+    Key k = key;
+    normalize_key(k, TreeType::KeyLen);
+    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), k.bytes.size()));
 
-    current_key.bytes.resize(TreeType::KeyLen);
-    memcpy(current_key.bytes.data(),
-           location.leaf->keys[location.key_index],
-           TreeType::KeyLen);
+    if(location.key_index == -1)
+    {
+        return false;
+    }
 
+    update_key_and_value();
     return true;
 }
 
@@ -133,6 +158,14 @@ template <typename TreeType>
 const Key& BPlusTreeCursor<TreeType>::get_key() const
 {
     return current_key;
+}
+template <typename TreeType>
+void BPlusTreeCursor<TreeType>::update_key_and_value()
+{
+    current_key.bytes.resize(TreeType::KeyLen);
+    std::memcpy(current_key.bytes.data(), location.leaf->keys[location.key_index], TreeType::KeyLen);
+
+    value = location.leaf->values[location.key_index];
 }
 
 

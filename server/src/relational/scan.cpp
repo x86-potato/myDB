@@ -64,19 +64,27 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
     }
     else
     {
-        mode_ = ScanMode::INDEX_SCAN;
+        if(table_.get_column_index(
+            std::get<ColumnOperand>(pred_->left).column) == 0)
+        {   
+            mode_ = ScanMode::INDEX_SCAN;
+        }
+        else
+        {
+            mode_ = ScanMode::SECONDARY_INDEX_SCAN;
+        }
     }
 
     //assume for literal predicates the left side is always the column name
-    if (mode_ == ScanMode::INDEX_SCAN)
+    if (mode_ == ScanMode::INDEX_SCAN || mode_ == ScanMode::SECONDARY_INDEX_SCAN)
     {
         std::string indexedColumnName = std::get<ColumnOperand>(pred_->left).column;
         std::string key = std::get<LiteralOperand>(pred_->right).literal;
 
         off_t index_location = table.get_column(indexedColumnName).indexLocation;
-
-        assert(index_location != -1);
-
+        
+        index_key_ = make_index_key(strip_quotes(key),
+                                     table.get_column(indexedColumnName).type);
         switch (table.get_column(indexedColumnName).type)
         {
             case Type::CHAR32:
@@ -102,20 +110,13 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
         {
             case AST::Op::EQ:
                 //set cursor to start at the literal given
-                cursor_->key = make_index_key(key, table.get_column(indexedColumnName).type);
                 break;
             case AST::Op::LT:
-                cursor_->key = std::nullopt;
                 break;
             case AST::Op::LTE:
-                cursor_->key = std::nullopt;
                 break;
             case AST::Op::GT:
-                cursor_->key = make_index_key(key, table.get_column(indexedColumnName).type);
-                cursor_->skip_equals = true;
-                break;
             case AST::Op::GTE:
-                cursor_->key = make_index_key(key, table.get_column(indexedColumnName).type);
                 break;
             default:
                 throw std::runtime_error("Unsupported operation for index scan");
@@ -145,35 +146,58 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
 
         cursor_->tree_root = index_location;
         cursor_->db = &database_;
-        cursor_->key = std::nullopt;
-        //cursor_->set(key);
-        //right now b tree cursor is set on first next call
-
     }
-
-
 }
 
 void Scan::reset()
 {
-    if (cursor_)
+    if(mode_ == ScanMode::FULL_SCAN)
     {
-        cursor_->set(std::nullopt);
+        cursor_->set_start();
     }
+    else
+    {
+        switch (pred_->op)
+        {
+            case AST::Op::EQ:
+            case AST::Op::GTE:
+                cursor_->set_gte(index_key_);
+                break;
+            case AST::Op::GT:
+                cursor_->set_gt(index_key_);
+                break;
+            case AST::Op::LT:
+            case AST::Op::LTE:
+                cursor_->set_start();
+                break;
+            default:
+                throw std::runtime_error("Unsupported operation");
+        }
+    }
+    started = false;
 }
 
-void Scan::set_key(const std::optional<Key>& key)
+void Scan::reset_and_skip()
+{
+    reset();
+    //special case, allows for a skip of one key
+    started = true;
+
+
+    cursor_->skip_read_leaves();
+}
+
+void Scan::set_key(const Key& key)
 {
     if (cursor_)
     {
-        cursor_->set(key);
-        cursor_->set_externally = true;
+        cursor_->set_gte(key);
     }
 }
 
-void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& column_name)
+void Scan::set_key_on_column(const Key& key, const std::string& column_name)
 {
-    if (!cursor_ || !key.has_value()) return;
+    if (!cursor_) return;
 
     // Find the column
     int col_idx = table_.get_column_index(column_name);
@@ -181,8 +205,7 @@ void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& c
 
     mode_ = ScanMode::INDEX_SCAN;
     set_by_join = true;
-    cursor_->set_externally = true;
-    index_key_ = key.value();
+    index_key_ = key;
 
 
     if (col.indexLocation == -1) {
@@ -209,54 +232,77 @@ void Scan::set_key_on_column(const std::optional<Key>& key, const std::string& c
 
     cursor_->tree_root = col.indexLocation;
     cursor_->db = &database_;
-    cursor_->set(key);
+    cursor_->set_gte(key);
 }
 
 bool Scan::next(Output& output)
 {
     output.tuples_.clear();
 
+    if (!started)
+    {
+        started = true;
+        
+        if (mode_ == ScanMode::FULL_SCAN) {
+            cursor_->set_start();
+        } else {
+            switch (pred_->op) {
+                case AST::Op::EQ:
+                case AST::Op::GTE:
+                    cursor_->set_gte(index_key_);
+                    break;
+                case AST::Op::GT:
+                    cursor_->set_gt(index_key_);
+                    break;
+                case AST::Op::LT:
+                case AST::Op::LTE:
+                    cursor_->set_start();
+                    break;
+                default:
+                    throw std::runtime_error("Unsupported operation");
+            }
+        }
+    }
+    else if (posting_block_index_ != -1)
+    {
+        //continue iterating posting list
+    }
+    else
+    {
+        if (!cursor_->next())
+            return false;
+    }
+
     if(mode_ == ScanMode::INDEX_SCAN)
     {
+        if (set_by_join)
+        {
+            if (!cursor_->key_equals(index_key_))
+                return false;
+        }
+        else if (!in_range(cursor_->get_key(), *pred_))
+        {
+            return false;
+        }
+
+        off_t value = cursor_->get_value();
+
+        // 5. Normal single record
+        output.tuples_.push_back({
+            .record = database_.file->get_record(value, table_),
+            .location = value,
+            .table_ = &table_
+        });
+
+        return true;
+    }
+    else if (mode_ == ScanMode::SECONDARY_INDEX_SCAN)
+    {
+        
+        // 3. Range / join predicate checks
+
         while (true)
         {
-            // 1. Still iterating a posting list
-            if (posting_block_index_ != -1)
-            {
-                if (posting_block_index_ < current_posting_block_.size)
-                {
-                    off_t record_location =
-                        current_posting_block_.entries[posting_block_index_++];
-
-                    output.tuples_.push_back({
-                        .record = database_.file->get_record(record_location, table_),
-                        .location = record_location,
-                        .table_ = &table_
-                    });
-
-                    return true;
-                }
-                if(current_posting_block_.next == 0)
-                {
-                    //end of posting list
-                    posting_block_index_ = -1;
-                    continue;
-                }
-                else
-                {
-                    //load next posting block
-                    current_posting_block_ =
-                        database_.file->load_posting_block(current_posting_block_.next);
-                    posting_block_index_ = 0;
-                    continue;
-                }
-            }
-
-            // 2. Advance index cursor
-            if (!cursor_->next())
-                return false;
-
-            // 3. Range / join predicate checks
             if (set_by_join)
             {
                 if (!cursor_->key_equals(index_key_))
@@ -266,48 +312,82 @@ bool Scan::next(Output& output)
             {
                 return false;
             }
+            if (posting_block_index_ != -1)
+            {
+                if (posting_block_reads < current_posting_block_.size && 
+                    posting_block_index_ < 509)  
+                {
+                    //a record pointer must always be greater than 4096, while delete pointers are < 510
+                    if(current_posting_block_.entries[posting_block_index_] < 4096)
+                    {
+                        posting_block_index_++;
+                        continue;
+                    }
+                    off_t record_location =
+                        current_posting_block_.entries[posting_block_index_];
+                    posting_block_index_++;
+                    posting_block_reads++;
+                    output.tuples_.push_back({
+                        .record = database_.file->get_record(record_location, table_),
+                        .location = record_location,
+                        .table_ = &table_
+                    });
+                    return true;
+                }
+                if(current_posting_block_.next == 0)
+                {
+                    //end of posting list
+                    posting_block_index_ = -1;
+                    if (!cursor_->next())
+                    {
+                        return false;
+                    }
+                    
+                    continue;
+                }
+                else
+                {
+                    //load next posting block
+                    current_posting_block_ =
+                        database_.file->load_posting_block(current_posting_block_.next);
+                    posting_block_index_ = 0;
+                    posting_block_reads = 0;
+                    continue;
+                }
+            }
 
-            off_t value = cursor_->get_value();
 
-            // 4. Posting list entry
-            if (value % 4096 == 0)
+
+            if (cursor_->get_value() % 4096 == 0)
             {
                 Posting_Block block =
-                    database_.file->load_posting_block(value);
+                    database_.file->load_posting_block(cursor_->get_value());
 
                 current_posting_block_ = block;
                 posting_block_index_ = 0;
 
-                continue;   // do not emit yet
+                continue;  
             }
 
             // 5. Normal single record
             output.tuples_.push_back({
-                .record = database_.file->get_record(value, table_),
-                .location = value,
+                .record = database_.file->get_record(cursor_->get_value(), table_),
+                .location = cursor_->get_value(),
                 .table_ = &table_
             });
 
             return true;
         }
+
     }
-    else
+    else if (mode_ == ScanMode::FULL_SCAN)
     {
         //full scan mode
-        while (true)
-        {
-            if (!cursor_->next())
-                return false;
-
-            off_t value = cursor_->get_value();
-
-            output.tuples_.push_back({
-                .record = database_.file->get_record(value, table_),
-                .location = value,
-                .table_ = &table_
-            });
-
-            return true;
-        }
+        output.tuples_.push_back({
+            .record = database_.file->get_record(cursor_->get_value(), table_),
+            .location = cursor_->get_value(),
+            .table_ = &table_
+        });
+        return true;
     }
 }

@@ -50,11 +50,11 @@ struct Posting_Block
 {
     off_t next = 0;
     off_t prev = 0;
+    off_t entries[509];
     uint32_t size = 0;
-
-    off_t entries[510];
-
+    int32_t free_index = -1;
 };
+
 
 struct Freed_Block
 {

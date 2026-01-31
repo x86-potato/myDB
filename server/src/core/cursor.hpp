@@ -4,6 +4,7 @@
 #include "btree.hpp"
 #include "../core/database.hpp"
 #include <optional>
+#include <algorithm>
 
 
 
@@ -11,19 +12,22 @@ class TreeCursor {
 public:
     off_t tree_root = 0;
     Database* db = nullptr;
-    std::optional<Key> key;
     Table* table = nullptr;
-    bool skip_equals = false;
-    bool delete_on_match = false;
-
-    bool set_externally = false;
 
     virtual bool next() = 0;
     virtual ~TreeCursor() = default;
 
     virtual const Key& get_key() const = 0;
     virtual off_t get_value() const = 0;
-    virtual bool set(const std::optional<Key>& key) = 0;
+
+
+    virtual void skip_read_leaves() = 0;
+    virtual void commit_progress() = 0;
+
+    virtual bool set_start() = 0;
+    virtual bool set_gt(const Key& key) = 0;
+    virtual bool set_gte(const Key& key) = 0;
+
     virtual bool key_equals(const Key& check) = 0;
 };
 
@@ -36,6 +40,8 @@ public:
     off_t value;
     LocationData<typename TreeType::LeafNodeType> location;
     bool started = false;
+    int leaves_read = 0;
+    int leaves_commited = 0;
 
 
     BPlusTreeCursor() = default;
@@ -45,8 +51,16 @@ public:
     const Key& get_key() const override;
 
     bool next() override;
-    bool set(const std::optional<Key>& key) override;
+
+    void skip_read_leaves() override;
+    void commit_progress() override;
+
+    bool set_start() override;
+    bool set_gte(const Key& key) override;
+    bool set_gt(const Key& key) override;
+
     bool key_equals(const Key& check) override;
+    void update_key_and_value();
 
 private:
     Key current_key;

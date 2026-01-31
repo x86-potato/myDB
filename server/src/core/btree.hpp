@@ -96,7 +96,9 @@ public:
     void delete_key(std::string delete_string, off_t record_location);
 
 
-    LocationData<LeafNodeType> locate(std::string key);
+    LocationData<LeafNodeType> locate_exact(std::string key);
+    LocationData<LeafNodeType> locate_gte(std::string key);
+    LocationData<LeafNodeType> locate_gt(std::string key);
 
     LocationData<LeafNodeType> locate_start();
 
@@ -136,8 +138,10 @@ private:
     void push_into_internal(InternalNodeT* target, char* value);
 
     //----------utill functions----------------
+    LeafNodeT* traverse_to_leaf(char* to_search);
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
+    int get_first_key_index_gte(char* to_locate, LeafNodeT* node);
     off_t get_next_leftmost_node_pointer(char* to_search,InternalNodeT *node);
     int find_left_node_child_index(NodeT *node);
     void print_recursive(NodeT* node, int depth, std::ostream& out);
