@@ -254,7 +254,9 @@ void Pipeline::ExecuteDelete()
 
     while (root->next(output))
     {
-        database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table);
+        if(database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table) != 0) {
+            break;
+        }
         deleted_count++;
 
         root->reset();

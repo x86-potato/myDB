@@ -27,6 +27,10 @@ template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::next() {
 
     location.key_index++; 
+    if(location.leaf == nullptr)
+    {
+        return false;
+    }
     if(location.key_index >= location.leaf->current_key_count) 
     {
         if(location.leaf->next_leaf == 0) 
@@ -95,7 +99,8 @@ void BPlusTreeCursor<TreeType>::commit_progress()
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_start()
 {
-    tree->tree_root = this->tree_root;
+    tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = tree->tree_root;
 
     tree->root_node =
         tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
@@ -103,7 +108,7 @@ bool BPlusTreeCursor<TreeType>::set_start()
 
 
     location = tree->locate_start();
-    if (location.key_index == -1)
+    if (location.key_index == -1 || location.leaf == nullptr || tree->root_node->current_key_count == 0)
     {
         return false;
     }
@@ -117,7 +122,9 @@ bool BPlusTreeCursor<TreeType>::set_start()
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
 {
-    tree->tree_root = this->tree_root;
+    //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
+    tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = tree->tree_root;
     tree->root_node =
         tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
 
@@ -135,7 +142,9 @@ bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_gt(const Key &key)
 {
-    tree->tree_root = this->tree_root;
+    //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
+    tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = tree->tree_root;
     tree->root_node =
         tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
 

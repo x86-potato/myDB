@@ -12,6 +12,7 @@ class TreeCursor {
 public:
     off_t tree_root = 0;
     Database* db = nullptr;
+    int column_index = 0; //to do, only works for primairy column
     Table* table = nullptr;
 
     virtual bool next() = 0;

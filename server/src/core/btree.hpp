@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstring>
 #include <string>
-
+#include <arpa/inet.h>
 
 #include "../config.h"
 #include "../storage/file.hpp"
@@ -93,7 +93,7 @@ public:
     void insert(std::string insert_string, off_t &record_location);
 
     //@brief deletes a key and its value
-    void delete_key(std::string delete_string, off_t record_location);
+    int delete_key(std::string delete_string, off_t record_location);
 
 
     LocationData<LeafNodeType> locate_exact(std::string key);

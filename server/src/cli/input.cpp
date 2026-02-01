@@ -6,7 +6,7 @@ CLI::CLI(Executor& executor) : executor_(executor) {}
 
 void CLI::run() {
     std::string line;
-    std::cout << "db> ";
+    std::cout << "db>>> ";
 
     while (std::getline(std::cin, line)) {
         if (line == "exit") {

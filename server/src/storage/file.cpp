@@ -103,7 +103,7 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
     {
         tree.insert(key, record_location);
         update_node<typename MyBtree::NodeType>(tree.root_node, tree.tree_root, sizeof(typename MyBtree::InternalNodeType));
-        
+
         // Update root if changed
         if(root != tree.tree_root)
         {
@@ -115,18 +115,18 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
     // Key exists - add to posting list
     off_t value = location.leaf->values[location.key_index];
-    
+
     // First duplicate - convert single pointer to posting list
     if(value % 4096 != 0 || value == 0)
     {
         off_t block_location = alloc_block();
         init_posting_block(block_location);
-        
+
         Posting_Block block = load_posting_block(block_location);
         block.size = 2;
         block.entries[0] = value;
         block.entries[1] = record_location;
-        
+
         location.leaf->values[location.key_index] = block_location;
         update_posting_block(block_location, block);
         update_node(location.leaf, location.leaf->disk_location, 4096);
@@ -136,13 +136,13 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
     // Posting list exists - find block with space
     off_t block_location = value;
     Posting_Block block = load_posting_block(block_location);
-    
+
     while(block.size == 509 && block.free_index == -1 && block.next != 0)
     {
         block_location = block.next;
         block = load_posting_block(block_location);
     }
-    
+
     // Current block has space - insert via freelist or append
     if(block.size < 509 || block.free_index != -1)
     {
@@ -163,18 +163,18 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
         update_posting_block(block_location, block);
         return;
     }
-    
+
     // All blocks full - allocate new block
     off_t new_block_location = alloc_block();
     init_posting_block(new_block_location);
-    
+
     Posting_Block new_block = load_posting_block(new_block_location);
     new_block.prev = block_location;
     new_block.size = 1;
     new_block.entries[0] = record_location;
-    
+
     block.next = new_block_location;
-    
+
     update_posting_block(block_location, block);
     update_posting_block(new_block_location, new_block);
 }
@@ -362,9 +362,9 @@ void File::delete_from_posting_list(off_t posting_block_location, off_t record_l
         {
             continue;  // Don't increment read_count for deleted entries
         }
-        
+
         read_count++;  // Found a valid entry
-        
+
         if(block.entries[i] == record_location)
         {
             //if first deletion
@@ -866,7 +866,7 @@ int File::update_record(Record &original_record,off_t location, int column_index
     return location;
 }
 
-void File::delete_record(const Record &record, off_t location, const Table& table)
+int File::delete_record(const Record &record, off_t location, const Table& table)
 {
     //first we clear out the secondary keys it may have
     int column_index = 0;
@@ -883,16 +883,20 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
             {
                 case Type::INTEGER:
                 {
+
                     int v = stoi(key);
                     v = ntohl(v);
                     std::string key(reinterpret_cast<const char*>(&v), 4);
                     database->index_tree4.tree_root = index.indexLocation;
                     database->index_tree4.root_node = load_node<typename MyBtree4::NodeType>(index.indexLocation);
-                    
+                    database->index_tree4.table = &const_cast<Table&>(table);
+
                     if(is_primary_column)
                     {
                         assert(key.size() == 4);
-                        database->index_tree4.delete_key(key, location);
+                        if (database->index_tree4.delete_key(key, location) != 0) {
+                            return -1;
+                        }
                     }
                     else
                     {
@@ -910,11 +914,14 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
                 case Type::CHAR32:
                     database->index_tree32.tree_root = index.indexLocation;
                     database->index_tree32.root_node = load_node<typename MyBtree32::NodeType>(index.indexLocation);
-                    
+                    database->index_tree32.table = &const_cast<Table&>(table);
+
                     if(is_primary_column)
                     {
                         assert(key.size() <= 32);
-                        database->index_tree32.delete_key(key, location);
+                        if (database->index_tree32.delete_key(key, location) != 0) {
+                            return -1;
+                        }
                     }
                     else
                     {
@@ -927,15 +934,18 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
                         delete_from_posting_list(posting_list_root, location);
                     }
                     break;
-                    
+
                 case Type::CHAR16:
                     database->index_tree16.tree_root = index.indexLocation;
                     database->index_tree16.root_node = load_node<typename MyBtree16::NodeType>(index.indexLocation);
-                    
+                    database->index_tree16.table = &const_cast<Table&>(table);
+
                     if(is_primary_column)
                     {
                         assert(key.size() <= 16);
-                        database->index_tree16.delete_key(key, location);
+                        if (database->index_tree16.delete_key(key, location) != 0) {
+                            return -1;
+                        }
                     }
                     else
                     {
@@ -948,15 +958,18 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
                         delete_from_posting_list(posting_list_root, location);
                     }
                     break;
-                    
+
                 case Type::CHAR8:
                     database->index_tree8.tree_root = index.indexLocation;
                     database->index_tree8.root_node = load_node<typename MyBtree8::NodeType>(index.indexLocation);
-                    
+                    database->index_tree8.table = &const_cast<Table&>(table);
+
                     if(is_primary_column)
                     {
                         assert(key.size() <= 8);
-                        database->index_tree8.delete_key(key, location);
+                        if (database->index_tree8.delete_key(key, location) != 0) {
+                            return -1;
+                        }
                     }
                     else
                     {
@@ -977,6 +990,8 @@ void File::delete_record(const Record &record, off_t location, const Table& tabl
 
         column_index++;
     }
+
+    return 0;
 }
 
 Data_Node *File::load_data_node(off_t location)

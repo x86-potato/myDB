@@ -19,6 +19,10 @@ bool Scan::in_range(const Key& key, const Predicate& pred)
 
     const Type columnType = table_.get_column(col_op.column).type;
 
+    if(cursor_->get_key().bytes.size() == 0) {
+        return false;
+    }
+
     if (columnType == Type::INTEGER) {
         // Interpret bytes as int32_t (big endian)
         int32_t key_val;
@@ -104,6 +108,8 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
         }
 
         cursor_->tree_root = index_location;
+        cursor_->table = &const_cast<Table&>(table_);
+        cursor_->column_index = table_.get_column_index(indexedColumnName);
         cursor_->db = &database_;
 
         switch (pred_->op)
@@ -145,6 +151,8 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
         }
 
         cursor_->tree_root = index_location;
+        cursor_->table = &const_cast<Table&>(table_);
+        cursor_->column_index = 0;
         cursor_->db = &database_;
     }
 }
@@ -244,22 +252,30 @@ bool Scan::next(Output& output)
         started = true;
         
         if (mode_ == ScanMode::FULL_SCAN) {
-            cursor_->set_start();
+            // FIX: Check if set_start failed (empty table)
+            if (!cursor_->set_start()) {
+                return false; 
+            }
         } else {
+            bool found = false;
             switch (pred_->op) {
                 case AST::Op::EQ:
                 case AST::Op::GTE:
-                    cursor_->set_gte(index_key_);
+                    found = cursor_->set_gte(index_key_);
                     break;
                 case AST::Op::GT:
-                    cursor_->set_gt(index_key_);
+                    found = cursor_->set_gt(index_key_);
                     break;
                 case AST::Op::LT:
                 case AST::Op::LTE:
-                    cursor_->set_start();
+                    found = cursor_->set_start();
                     break;
                 default:
                     throw std::runtime_error("Unsupported operation");
+            }
+            // FIX: Check if the initial seek failed
+            if (!found) {
+                return false;
             }
         }
     }
