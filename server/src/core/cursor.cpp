@@ -63,7 +63,8 @@ bool BPlusTreeCursor<TreeType>::next() {
 template <typename TreeType>
 void BPlusTreeCursor<TreeType>::skip_read_leaves()
 {
-    int target_skip = std::max(0, leaves_read - 1);
+    int target_skip = std::max(0, leaves_read -2);
+    //int target_skip = 0;
     int skipped = 0;
 
     //std::cout << "Skipping " << target_skip << " leaves\n";
@@ -80,7 +81,7 @@ void BPlusTreeCursor<TreeType>::skip_read_leaves()
     }
 
     //can never skip to the end
-    assert(location.leaf->next_leaf != 0);
+    //assert(location.leaf->next_leaf != 0);
     leaves_read -= 2;
 
 

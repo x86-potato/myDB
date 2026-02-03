@@ -113,6 +113,29 @@ int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_st
     {
         NodeT *parent = file->load_node<NodeT>(cursor->parent);
         InternalNodeT* parent_cast = static_cast<InternalNodeT*>(parent);
+
+        if (parent_cast->current_key_count == 0 && parent_cast->parent == 0)
+        {
+            // The parent is a root with 0 keys. It is superfluous.
+            // Current node (cursor) should be the new root.
+            
+            cursor->parent = 0;
+            off_t old_root = tree_root;
+            off_t new_root = cursor->disk_location;
+
+            file->update_root_pointer(table, old_root, new_root);
+            //std::cout << "[FIX] Collapsing 0-key root. New root: " << new_root << "\n";
+            
+            tree_root = new_root;
+            root_node = cursor; // Update cache
+
+            file->update_node(cursor, cursor->disk_location, sizeof(LeafNodeT));
+            
+            // We are now the root, so we don't need to balance with siblings
+            return 0;
+        }
+
+
         int child_index = find_child_index(parent_cast, cursor->disk_location);
 
         bool borrow_success = attempt_borrow(cursor, parent_cast, child_index);
@@ -130,6 +153,9 @@ int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_st
 
             // Reload root in case it changed during merge
             root_node = file->load_node<NodeT>(tree_root);
+
+
+            return 0;
             cursor = file->load_node<NodeT>(surviving_node_location);
         }
         else
@@ -389,7 +415,7 @@ template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::print_tree()
 {
     root_node = file->load_node<NodeT>(tree_root);
-    std::cout << "B+ Tree structure (root at " << root_node->disk_location << "):\n";
+    //std::cout << "B+ Tree structure (root at " << root_node->disk_location << "):\n";
     print_recursive(root_node, 0, std::cout);
 }
 
@@ -412,6 +438,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(
     NodeT* current,
     int child_index)
 {
+    //std::cout << "leaf merge called"<<std::endl;
     if (child_index != 0)  // merge current into left
     {
         NodeT* left_node = file->load_node<NodeT>(parent->children[child_index - 1]);
@@ -442,6 +469,8 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(
         int separator_index = child_index - 1;
         delete_index_in_node(separator_index, parent, child_index);  // remove separator + pointer to current
 
+        file->update_node(parent, parent->disk_location, sizeof(InternalNodeT));
+
         if (check_underflow(parent))
         {
             internal_underflow(parent);
@@ -456,7 +485,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(
             off_t new_root = left_node->disk_location;
 
             file->update_root_pointer(table, old_root, new_root);
-            std::cout << "[ROOT PROMOTION via LEAF MERGE] Empty root -> new root: " << new_root << "\n";
+            //std::cout << "[ROOT PROMOTION via LEAF MERGE] Empty root -> new root: " << new_root << "\n";
             tree_root = new_root;
             root_node = left_node;
 
@@ -495,6 +524,8 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(
         int separator_index = child_index;
         delete_index_in_node(separator_index, parent, child_index + 1);  // remove separator + pointer to right
 
+        file->update_node(parent, parent->disk_location, sizeof(InternalNodeT));
+
         if (check_underflow(parent))
         {
             internal_underflow(parent);
@@ -509,7 +540,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::leaf_merge(
             off_t new_root = current->disk_location;
 
             file->update_root_pointer(table, old_root, new_root);
-            std::cout << "[ROOT PROMOTION via LEAF MERGE] Empty root -> new root: " << new_root << "\n";
+            //std::cout << "[ROOT PROMOTION via LEAF MERGE] Empty root -> new root: " << new_root << "\n";
             tree_root = new_root;
             root_node = current;
 
@@ -551,7 +582,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::internal_underflow(NodeT* node)
             tree_root   = new_root_loc;
             root_node   = new_root_node;
 
-            std::cout << "[ROOT PROMOTION] Empty root → new root: " << tree_root << "\n";
+            //std::cout << "[ROOT PROMOTION] Empty root → new root: " << tree_root << "\n";
 
             file->update_node(new_root_node, new_root_loc, sizeof(InternalNodeT));
 
@@ -598,6 +629,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::internal_underflow(NodeT* node)
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::merge_internal(InternalNodeT* node, InternalNodeT* parent, int child_index)
 {
+    //std::cout << "merge internal called"<<std::endl;
     //first we insert parent key into the back of this one
     if(child_index != 0) //merge with left
     {
@@ -609,25 +641,27 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::merge_internal(InternalNodeT* n
         left->current_key_count++;
         //move nodes children into left
         int left_key_count = left->current_key_count;
-        for(int i = 0; i < node->current_key_count + 1; i++) {
-            left->children[left_key_count + i] = node->children[i];
-            NodeT* child = file->load_node<NodeT>(node->children[i]);
-            child->parent = left->disk_location;
-            file->update_node(child, child->disk_location, sizeof(InternalNodeT));
+        int left_child_start = left->current_key_count; // keys already incremented, this is correct slot
+        for (int i = 0; i < node->current_key_count + 1; i++) {
+            left->children[left_child_start + i] = node->children[i];
         }
-        for(int i = 0; i < left->current_key_count + 1; i++)
-        {
-            NodeT* child = file->load_node<NodeT>(left->children[i]);
-            child->parent = left->disk_location;
-        } 
+
+        // Move node's keys into left
         int current_key_iterator = 0;
-        //move all keys to the end of the internal node
-        while(node->current_key_count > 0)
-        {
+        while (node->current_key_count > 0) {
             memcpy(left->keys[left->current_key_count], node->keys[current_key_iterator], KeyLen);
             left->current_key_count++;
             current_key_iterator++;
             node->current_key_count--;
+        }
+
+        // FIX: NOW re-parent ALL of left's children (including newly moved ones) and persist
+        for (int i = 0; i < left->current_key_count + 1; i++) {
+            if (left->children[i]) {
+                NodeT* child = file->load_node<NodeT>(left->children[i]);
+                child->parent = left->disk_location;
+                file->update_node(child, child->disk_location, sizeof(InternalNodeT));
+            }
         }
         delete_index_in_node(separator_index, parent, child_index);
         parent->children[child_index-1] = left->disk_location;
@@ -650,7 +684,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::merge_internal(InternalNodeT* n
             off_t new_root = left->disk_location;
 
             file->update_root_pointer(table, old_root, new_root);
-            std::cout << "[ROOT PROMOTION] Empty root -> new root: " << new_root << "\n";
+            //std::cout << "[ROOT PROMOTION] Empty root -> new root: " << new_root << "\n";
             tree_root = new_root;
             root_node = left; // Update cache just in case
 
@@ -667,24 +701,34 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::merge_internal(InternalNodeT* n
         node->current_key_count++;
         InternalNodeT *right = static_cast<InternalNodeT*>(file->load_node<NodeT>(parent->children[child_index+1]));
         //first move rights childer
-        for(int i = 0; i < right->current_key_count+1; i++)
-        {
-            node->children[node->current_key_count+i] = right->children[i];
+        for (int i = 0; i < right->current_key_count + 1; i++) {
+            node->children[node->current_key_count + i] = right->children[i];
+        }
 
+        int total_keys = node->current_key_count + right->current_key_count;
+        if (total_keys > MaxKeys) {
+            std::cerr << "FATAL: Merge overflow. MaxKeys: " << MaxKeys 
+                    << " Attempting to store: " << total_keys << std::endl;
+            exit(1);
         }
-        for(int i = 0; i < node->current_key_count + 1; i++)
-        {
-            NodeT* child = file->load_node<NodeT>(node->children[i]);
-            child->parent = node->disk_location;
-        }
+        // Move right's keys into node
         int current_key_iterator = 0;
-        //move all keys to the end of the internal node
-        while(right->current_key_count > 0)
-        {
+        while (right->current_key_count > 0) {
             memcpy(node->keys[node->current_key_count], right->keys[current_key_iterator], KeyLen);
             node->current_key_count++;
             current_key_iterator++;
             right->current_key_count--;
+        }
+
+
+
+        // FIX: re-parent ALL of node's children and persist each one
+        for (int i = 0; i < node->current_key_count + 1; i++) {
+            if (node->children[i]) {
+                NodeT* child = file->load_node<NodeT>(node->children[i]);
+                child->parent = node->disk_location;
+                file->update_node(child, child->disk_location, sizeof(InternalNodeT));
+            }
         }
         delete_index_in_node(child_index, parent, child_index + 1);
         parent->children[child_index] = node->disk_location;
@@ -705,7 +749,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::merge_internal(InternalNodeT* n
             off_t new_root = node->disk_location;
 
             file->update_root_pointer(table, old_root, new_root);
-            std::cout << "[ROOT PROMOTION] Empty root -> new root: " << new_root << "\n";
+            //std::cout << "[ROOT PROMOTION] Empty root -> new root: " << new_root << "\n";
             tree_root = new_root;
             root_node = node; // Update cache just in case
 
@@ -786,6 +830,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_left_internal(InternalNo
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_right_internal(InternalNodeT *self,InternalNodeT* parent, InternalNodeT* right, int child_index)
 {
+    //std::cout << "borrow right internal" << std::endl;
     int separator_index = child_index;
     //first we copy parent key
     //push_into_internal(self, parent->keys[separator_index]);
@@ -800,13 +845,14 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_right_internal(InternalN
     right->children[0] = 0;
 
     file->update_node(moved_child, moved_child->disk_location, sizeof(InternalNodeT));
-    file->update_node(right, right->disk_location, sizeof(InternalNodeT));  
-    file->update_node(parent, parent->disk_location, sizeof(InternalNodeT));
 
     //std::cout << "\n val: " << right->children[1];
     delete_index_in_node(0, right,0);
     //we forgot to change the moved nodes parent
 
+    file->update_node(self, self->disk_location, sizeof(InternalNodeT));
+    file->update_node(right, right->disk_location, sizeof(InternalNodeT));  
+    file->update_node(parent, parent->disk_location, sizeof(InternalNodeT));
     //std::cout << "\n val: " << right->children[0];
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
@@ -880,15 +926,19 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::check_underflow(NodeT* node)
 
     // Non-root node: underflow if keys < ⌈(MaxKeys+1)/2⌉ - 1
     // which is equivalent to keys < (MaxKeys + 1) / 2    (integer division)
-    int min_keys_nonroot = (MaxKeys + 1) / 2;
+    int min_keys_nonroot = MaxKeys / 2;
 
     return (node->current_key_count < min_keys_nonroot);
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::get_underflow_amount()
 {
-    int x = (((MaxKeys-1)/2) - 1);
-    return x;
+    // Logic: A node underflows if keys < (MaxKeys + 1) / 2
+    // We can only borrow if (count - 1) >= (MaxKeys + 1) / 2
+    // So trigger threshold is: count - 1 > ((MaxKeys + 1) / 2) - 1
+    
+    int min_keys = (MaxKeys) / 2;
+    return min_keys - 1; 
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::attempt_borrow(NodeT *current, InternalNodeT *parent, int currents_child_index)
@@ -926,6 +976,7 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>::attempt_borrow(NodeT *current, 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_left_leaf(NodeT* current, NodeT* left)
 {
+    //std::cout << "borrow left leaf"<<std::endl;
     LeafNodeT* cur_cast  = static_cast<LeafNodeT*>(current);
     LeafNodeT* left_cast = static_cast<LeafNodeT*>(left);
 
@@ -960,6 +1011,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_left_leaf(NodeT* current
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_right_leaf(NodeT* current, NodeT* right)
 {
+    //std::cout << "borrow right leaf"<<std::endl;
     LeafNodeT* cur_cast  = static_cast<LeafNodeT*>(current);
     LeafNodeT* right_cast = static_cast<LeafNodeT*>(right);
 
@@ -1223,6 +1275,7 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::split_leaf(NodeT* node)
         right_node.parent = new_parent.disk_location;  // Changed: use .
 
         root_node = &new_parent;  // Changed: take address
+        //file->update_node()
         tree_root = new_parent.disk_location;
 
         std::memcpy(new_parent.keys[0], middle_key, KeyLen);

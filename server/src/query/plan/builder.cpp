@@ -228,7 +228,7 @@ Pipeline::Pipeline(Path &path, Database& database) :  path_(path), database_(dat
     build_buckets();
     sort_buckets();
 
-    print_buckets();
+    //print_buckets();
 
 
     build_forest();

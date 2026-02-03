@@ -189,9 +189,9 @@ void Scan::reset_and_skip()
 {
     reset();
     //special case, allows for a skip of one key
-    started = true;
-
-
+    // Don't set started = true here! We need the next call to next() 
+    skipped_ = true;
+    // to do the initial seek again after reset
     cursor_->skip_read_leaves();
 }
 
@@ -247,7 +247,7 @@ bool Scan::next(Output& output)
 {
     output.tuples_.clear();
 
-    if (!started)
+    if (!started && !skipped_)
     {
         started = true;
         
@@ -283,10 +283,15 @@ bool Scan::next(Output& output)
     {
         //continue iterating posting list
     }
-    else
+    else if (!skipped_)
     {
         if (!cursor_->next())
             return false;
+    }
+    if(skipped_)
+    {
+        skipped_ = false;
+        started = true;
     }
 
     if(mode_ == ScanMode::INDEX_SCAN)

@@ -94,6 +94,7 @@ private:
     const Predicate* pred_;
     Key index_key_;
     bool set_by_join = false;
+    bool skipped_ = false;
     bool started = false;
     ScanMode mode_;
     

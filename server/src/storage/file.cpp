@@ -869,6 +869,8 @@ int File::update_record(Record &original_record,off_t location, int column_index
 int File::delete_record(const Record &record, off_t location, const Table& table)
 {
     //first we clear out the secondary keys it may have
+
+
     int column_index = 0;
     for (auto& index : table.columns)
     {
@@ -884,9 +886,16 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                 case Type::INTEGER:
                 {
 
+
                     int v = stoi(key);
                     v = ntohl(v);
                     std::string key(reinterpret_cast<const char*>(&v), 4);
+
+                    if(database->index_tree4.tree_root != index.indexLocation)
+                    {
+                        std::cout << "hit";
+                    }
+
                     database->index_tree4.tree_root = index.indexLocation;
                     database->index_tree4.root_node = load_node<typename MyBtree4::NodeType>(index.indexLocation);
                     database->index_tree4.table = &const_cast<Table&>(table);
