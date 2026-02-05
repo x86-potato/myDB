@@ -116,6 +116,10 @@ public:
 
     //@brief returns LeafNode Type of the furthest left node
     LeafNodeT* find_leftmost_leaf();
+
+
+    //@brief update the value associated with a key
+    void update_value(std::string key, off_t new_value);
 private:
     //----------handle deletion----------------
     bool check_underflow(NodeT* node);

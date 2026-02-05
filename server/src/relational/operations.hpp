@@ -81,6 +81,8 @@ public:
     Scan(Database& database, const Table& table, const Predicate* pred = nullptr);
 
     bool next(Output &output) override;
+    bool next_from_posting_list(Output& output);
+
     void reset() override;
     void set_key(const Key& key) override;
     void set_key_on_column(const Key& key, const std::string& column_name) override;
@@ -99,9 +101,11 @@ private:
     ScanMode mode_;
     
     bool on_secondary_index_ = false;
-    Posting_Block current_posting_block_;
+    Posting_Block *current_posting_block_ = nullptr;
     size_t posting_block_index_ = -1;
     int posting_block_reads = 0;
+    int current_slot = 0;
+    off_t current_block_location = 0;
 
 
 
@@ -156,6 +160,7 @@ public:
     void reset() override;
     void set_key(const Key& key) override;
     void reset_and_skip() override;
+
 
 private:
     Database& database_;

@@ -184,6 +184,24 @@ int BtreePlus<NodeT, LeafNodeT, InternalNodeT>::delete_key(std::string delete_st
     return 0;
 }
 
+template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::update_value(std::string key, off_t new_value)
+{
+    char buffer[KeyLen] = {0};
+    std::memcpy(buffer, key.c_str(), key.length());
+
+    LeafNodeT* leaf = traverse_to_leaf(buffer);
+    int index = get_first_key_index_gte(buffer, static_cast<LeafNodeT*>(leaf));
+
+    if(memcmp(leaf->keys[index], buffer, KeyLen) != 0)
+    {
+        return;
+    }
+
+    leaf->values[index] = new_value;
+    file->update_node(static_cast<NodeT*>(leaf), leaf->disk_location, sizeof(LeafNodeT));
+    return;
+}
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::get_next_leftmost_node_pointer(char* to_search,InternalNodeT *node)

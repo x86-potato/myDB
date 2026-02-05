@@ -163,7 +163,7 @@ void Scan::reset()
     {
         cursor_->set_start();
     }
-    else
+    else if(mode_ == ScanMode::INDEX_SCAN)//TODO: speed up for secondary indexing.
     {
         switch (pred_->op)
         {
@@ -181,6 +181,14 @@ void Scan::reset()
             default:
                 throw std::runtime_error("Unsupported operation");
         }
+    }
+
+    if(mode_ == ScanMode::SECONDARY_INDEX_SCAN)
+    {
+        //cursor_->set_gte(index_key_); 
+        //posting_block_index_ = -1;
+        //posting_block_reads = 0;
+        return;
     }
     started = false;
 }
@@ -243,6 +251,45 @@ void Scan::set_key_on_column(const Key& key, const std::string& column_name)
     cursor_->set_gte(key);
 }
 
+
+bool Scan::next_from_posting_list(Output& output)
+{
+    while (true) {
+        if(!in_range(cursor_->get_key(), *pred_)) {
+            return false;
+        }
+
+        if (current_posting_block_ == nullptr) {
+            // load first block from posting_list_root
+            current_posting_block_ = database_.file->load_posting_block(cursor_->get_value());
+            current_block_location = cursor_->get_value();
+            current_slot = 0;
+        }
+
+        while (current_slot < 509) {
+            off_t loc = current_posting_block_->entries[current_slot++];
+            if (loc >= 4096) {        // valid record_location
+                output.tuples_.push_back({
+                    .record = database_.file->get_record(loc, table_),
+                    .location = loc,
+                    .table_ = &table_
+                });
+                return true;
+            }
+        }
+
+        // move to next block in the posting list
+        if (current_posting_block_->next == 0)
+        {
+            return false; // end of posting list
+        }
+
+        current_block_location = current_posting_block_->next;
+        current_posting_block_ = database_.file->load_posting_block(current_block_location);
+        current_slot = 0;
+    }
+}
+
 bool Scan::next(Output& output)
 {
     output.tuples_.clear();
@@ -283,7 +330,7 @@ bool Scan::next(Output& output)
     {
         //continue iterating posting list
     }
-    else if (!skipped_)
+    else if (!skipped_ && mode_ != ScanMode::SECONDARY_INDEX_SCAN)
     {
         if (!cursor_->next())
             return false;
@@ -319,87 +366,35 @@ bool Scan::next(Output& output)
     }
     else if (mode_ == ScanMode::SECONDARY_INDEX_SCAN)
     {
-        
-        // 3. Range / join predicate checks
-
+        // Keep advancing keys until we either produce a tuple
+        // from some posting list, or run out / go out of range.
         while (true)
         {
-            if (set_by_join)
+            if (next_from_posting_list(output))
             {
-                if (!cursor_->key_equals(index_key_))
-                    return false;
+                // We produced a record from the current posting list.
+                return true;
             }
-            else if (!in_range(cursor_->get_key(), *pred_))
+
+            // Current posting list is exhausted (or key out of range
+            // according to next_from_posting_list); move to next key.
+            if (!cursor_->next())
+            {
+                return false; // no more keys
+            }
+
+            // Stop if new key is out of range for the predicate
+            if (!in_range(cursor_->get_key(), *pred_))
             {
                 return false;
             }
-            if (posting_block_index_ != -1)
-            {
-                if (posting_block_reads < current_posting_block_.size && 
-                    posting_block_index_ < 509)  
-                {
-                    //a record pointer must always be greater than 4096, while delete pointers are < 510
-                    if(current_posting_block_.entries[posting_block_index_] < 4096)
-                    {
-                        posting_block_index_++;
-                        continue;
-                    }
-                    off_t record_location =
-                        current_posting_block_.entries[posting_block_index_];
-                    posting_block_index_++;
-                    posting_block_reads++;
-                    output.tuples_.push_back({
-                        .record = database_.file->get_record(record_location, table_),
-                        .location = record_location,
-                        .table_ = &table_
-                    });
-                    return true;
-                }
-                if(current_posting_block_.next == 0)
-                {
-                    //end of posting list
-                    posting_block_index_ = -1;
-                    if (!cursor_->next())
-                    {
-                        return false;
-                    }
-                    
-                    continue;
-                }
-                else
-                {
-                    //load next posting block
-                    current_posting_block_ =
-                        database_.file->load_posting_block(current_posting_block_.next);
-                    posting_block_index_ = 0;
-                    posting_block_reads = 0;
-                    continue;
-                }
-            }
 
-
-
-            if (cursor_->get_value() % 4096 == 0)
-            {
-                Posting_Block block =
-                    database_.file->load_posting_block(cursor_->get_value());
-
-                current_posting_block_ = block;
-                posting_block_index_ = 0;
-
-                continue;  
-            }
-
-            // 5. Normal single record
-            output.tuples_.push_back({
-                .record = database_.file->get_record(cursor_->get_value(), table_),
-                .location = cursor_->get_value(),
-                .table_ = &table_
-            });
-
-            return true;
+            // Reset posting list state for the new key; loop and
+            // let next_from_posting_list() handle it.
+            current_posting_block_ = nullptr;
+            posting_block_index_ = -1;
+            current_block_location = 0;
         }
-
     }
     else if (mode_ == ScanMode::FULL_SCAN)
     {

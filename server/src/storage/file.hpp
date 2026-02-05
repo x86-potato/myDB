@@ -50,7 +50,7 @@ struct Posting_Block
 {
     off_t next = 0;
     off_t prev = 0;
-    off_t entries[509];
+    off_t entries[509] = {0}; // 509 entries of 8 bytes each = 4072 bytes
     uint32_t size = 0;
     int32_t free_index = -1;
 };
@@ -145,7 +145,7 @@ public:
     Record get_record(off_t record_location, const Table& table);
     int delete_record(const Record &record, off_t location, const Table& table);
 
-    Posting_Block load_posting_block(off_t location);
+    Posting_Block *load_posting_block(off_t location);
 
 private:
     void header_block_creation();
@@ -157,7 +157,7 @@ private:
     void init_data_node(off_t location);
 
     void init_posting_block(off_t location);
-    void update_posting_block(off_t location, Posting_Block &block);
+    void update_posting_block(off_t location, Posting_Block *block);
     void delete_from_posting_list(off_t posting_block_location, off_t record_location);
 
     off_t get_table_block();
