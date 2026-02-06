@@ -26,6 +26,7 @@ delete from users where state == "XX";
 delete from users where state == "AK";
 delete from users where state == "HI";
 delete from users where state == "GU";
+
 delete from users where state == "MP";
 
 
