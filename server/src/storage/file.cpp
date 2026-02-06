@@ -869,20 +869,75 @@ off_t File::write_record(Record &record)
 
 }
 
-//@this must only be called on a column index that is static, or new value is same size as old value
-int File::update_record(Record &original_record,off_t location, int column_index, std::string& value)
+//@breif updates a record at a given location and column with a new value
+int File::update_record(Record &original_record,off_t location, int column_index, std::string& value, Table* table)
 {
+    //first check if the column had been idnexed
+    bool indexed = (table->columns[column_index].indexLocation != -1);
+
+
+
     off_t block_address = (location / BLOCK_SIZE) * BLOCK_SIZE;
-
-
-
-
-    original_record.update_column(column_index, value, database->get_table("users"));
-
 
     Page* page = cache.read_block(block_address);
 
-    cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
+
+    switch (table->columns[column_index].type)
+    {
+        case Type::INTEGER:
+        {
+            if(indexed)
+            {
+                uint32_t old_value = std::stoi(original_record.get_token(column_index, *table));
+                uint32_t big_endian_old = htonl(old_value);
+                std::string old_key(reinterpret_cast<const char*>(&big_endian_old), 4);
+
+                uint32_t new_value = std::stoi(value);
+                uint32_t big_endian_new = htonl(new_value);
+                std::string new_key(reinterpret_cast<const char*>(&big_endian_new), 4);
+
+                database->index_tree4.tree_root = table->columns[column_index].indexLocation;
+                database->index_tree4.root_node = load_node<typename MyBtree4::NodeType>(table->columns[column_index].indexLocation);
+                database->index_tree4.table = table;
+
+                //delete old key
+                if (database->index_tree4.delete_key(old_key, location) != 0) {
+                    return -1;
+                }
+
+                //insert new key
+                database->index_tree4.insert(new_key, location);
+            }
+
+
+            int32_t big_endian_new = std::stoi(value);
+            big_endian_new = htonl(big_endian_new);
+            original_record.update_column(column_index, value, *table);
+            value.append(reinterpret_cast<const char*>(&big_endian_new), sizeof(big_endian_new));
+
+
+            //write in line, as the record size is not changing
+            cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
+            break;
+        }
+        case Type::CHAR32:
+        case Type::CHAR16:
+        case Type::CHAR8:
+            delete_record(original_record, location, *table);
+            strip_quotes(value);
+
+            original_record.update_column(column_index, value, *table);
+
+            database->insert(table->name, original_record.to_tokens(*table));
+            break;
+
+    }
+
+
+
+
+
+
 
     return location;
 }
@@ -964,7 +1019,23 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                             database->index_tree32.delete_key(key, location);
                             break;
                         }
+
+                        Posting_Block *block = load_posting_block(posting_list_root);
                         delete_from_posting_list(posting_list_root, location);
+
+                        if(block->size == 0)
+                        {
+                            if(block->next != 0)
+                            {
+                                database->index_tree32.update_value(key, block->next);
+                                break;
+                            }
+                            else
+                            {
+                                database->index_tree32.delete_key(key, location);
+                                break;
+                            }
+                        }
                     }
                     break;
 
@@ -988,7 +1059,23 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                             database->index_tree16.delete_key(key, location);
                             break;
                         }
+
+                        Posting_Block *block = load_posting_block(posting_list_root);
                         delete_from_posting_list(posting_list_root, location);
+
+                        if(block->size == 0)
+                        {
+                            if(block->next != 0)
+                            {
+                                database->index_tree16.update_value(key, block->next);
+                                break;
+                            }
+                            else
+                            {
+                                database->index_tree16.delete_key(key, location);
+                                break;
+                            }
+                        }
                     }
                     break;
 
@@ -1012,7 +1099,23 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                             database->index_tree8.delete_key(key, location);
                             break;
                         }
+
+                        Posting_Block *block = load_posting_block(posting_list_root);
                         delete_from_posting_list(posting_list_root, location);
+
+                        if(block->size == 0)
+                        {
+                            if(block->next != 0)
+                            {
+                                database->index_tree8.update_value(key, block->next);
+                                break;
+                            }
+                            else
+                            {
+                                database->index_tree8.delete_key(key, location);
+                                break;
+                            }
+                        }
                     }
                     break;
 

@@ -140,7 +140,7 @@ public:
     off_t insert_table(Table &table);
     std::vector<Table> load_table();
 
-    int update_record(Record &original_record,off_t location, int column_index, std::string &value);
+    int update_record(Record &original_record,off_t location, int column_index, std::string &value, Table* table);
     off_t write_record(Record &record);
     Record get_record(off_t record_location, const Table& table);
     int delete_record(const Record &record, off_t location, const Table& table);

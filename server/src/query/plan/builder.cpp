@@ -277,33 +277,14 @@ void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
     int modified_count = 0;
     while (root->next(output))
     {
-        switch(table.columns[index].type)
+
+        if(auto arg = std::get_if<AST::Literal>(update_args[0].value.get()))
         {
-            case Type::INTEGER:
-                if(auto arg = std::get_if<AST::Literal>(update_args[0].value.get()))
-                {
-                    std::string value;
-
-                    int32_t number = std::stoi(arg->value);
-                    //uint32_t big_endian = htonl(static_cast<uint32_t>(number));
-
-                    value.append(reinterpret_cast<const char*>(&number), sizeof(number));
-
-
-                    database_.file->update_record(
-                        output.tuples_[0].record,
-                        output.tuples_[0].location,
-                        index, value);
-
-                }
-                else {
-                    std::cerr << "only = literal supported right now";
-                }
-
-                break;
-            default:
-                std::cout << "Unsupported type" << std::endl;
-                //throw std::runtime_error("Unsupported type");
+            database_.file->update_record(
+                output.tuples_[0].record,
+                output.tuples_[0].location,
+                index,arg->value, 
+                &table);
         }
         modified_count++;
     }

@@ -19,46 +19,71 @@ std::string strip_quotes(const std::string &input)
 void Record::update_column(int column_index, std::string &value, const Table& table)
 {
     size_t offset = 0;
-
-    // Parse through columns like to_tokens does to find the correct offset
     for (int i = 0; i < column_index; ++i)
-    {
-        switch (table.columns[i].type)
-        {
-            case Type::BOOL:
-                offset += 1;
-                break;
-            case Type::INTEGER:
-                offset += sizeof(int32_t);
-                break;
-            case Type::CHAR8:
-            case Type::CHAR16:
-            case Type::CHAR32:
-            case Type::TEXT:
-            {
-                uint8_t len = static_cast<uint8_t>(str[offset]);
-                offset += 1 + len;  // 1 byte for length + actual data
-                break;
-            }
-        }
-    }
+        offset += column_lengths[i];
 
-    // Now at the correct column, handle the update based on type
-    switch (table.columns[column_index].type)
+    auto type = table.columns[column_index].type;
+
+    switch (type)
     {
         case Type::BOOL:
         case Type::INTEGER:
-            memcpy(str.data() + offset, value.c_str(), value.length());
-            break;
+        {
+            memcpy(str.data() + offset, value.data(), value.size());
+            return;
+        }
+
         case Type::CHAR8:
         case Type::CHAR16:
         case Type::CHAR32:
         case Type::TEXT:
         {
-            uint8_t len = static_cast<uint8_t>(str[offset]);
-            assert(len == value.size());
-            memcpy(str.data() + offset + 1, value.c_str(), value.length());
-            break;
+            uint8_t new_len = static_cast<uint8_t>(value.size());
+            // Note: offset points to the length byte, not the data
+            uint8_t old_len = static_cast<uint8_t>(str[offset]);
+
+            size_t old_total = column_lengths[column_index];
+            size_t new_total = 1 + new_len;
+
+            int delta = static_cast<int>(new_total) - static_cast<int>(old_total);
+
+            size_t tail_src = offset + old_total;
+            size_t tail_size = str.size() - tail_src;
+
+            if (delta > 0)
+            {
+                // EXPANDING: Resize first to allocate memory, then shift tail right
+                str.resize(str.size() + delta);
+                memmove(
+                    str.data() + offset + new_total, // Dest
+                    str.data() + tail_src,           // Src (old position)
+                    tail_size
+                );
+            }
+            else if (delta < 0)
+            {
+                // SHRINKING: Shift tail left FIRST to save data, then trim the end
+                memmove(
+                    str.data() + offset + new_total, // Dest (new position)
+                    str.data() + tail_src,           // Src
+                    tail_size
+                );
+                str.resize(str.size() + delta);
+            }
+
+            // Write new length byte
+            str[offset] = static_cast<char>(new_len);
+
+            // Write payload
+            memcpy(str.data() + offset + 1, value.data(), new_len);
+
+            // Update cached column size
+            column_lengths[column_index] = new_total;
+
+            // Update record length
+            length = str.size();
+
+            return;
         }
     }
 }
