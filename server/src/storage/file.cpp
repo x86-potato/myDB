@@ -92,7 +92,7 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
     using NodeT = typename MyBtree::NodeType;
     off_t root = table.columns[column_index].indexLocation;
     NodeT *loaded_node = load_node<NodeT>(root);
-
+    //cache->pin_page(root);
     tree.root_node = loaded_node;
     tree.tree_root = root;
 
@@ -177,6 +177,8 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
     update_posting_block(block_location, block);
     update_posting_block(new_block_location, new_block);
+
+    //cache->unpin_page(root);
 }
 
 
@@ -286,7 +288,6 @@ void File::generate_index(int columnIndex, Table& table,
             return;
     }
 }
-
 
 
 

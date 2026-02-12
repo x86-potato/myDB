@@ -203,6 +203,9 @@ void Pipeline::compress_forest()
 
         assert (get_index_left != -1 && get_index_right != -1);
 
+        //notify inner scan
+        forest[get_index_right]->set_to_inner();
+
         auto sub_tree = std::make_unique<Join>(
             database_,
             const_cast<Table&>(*(forest[get_index_left]->tables_[0])),
@@ -210,6 +213,8 @@ void Pipeline::compress_forest()
             std::move(forest[get_index_left]),
             std::move(forest[get_index_right]),
             join_pred);
+
+
         //erase the idnex left, right from forest, and pop first join candidate
         int i = get_index_left;
         int j = get_index_right;

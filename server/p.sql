@@ -1,1 +1,1 @@
-delete from users where uid > 4 and name == "Elizabeth Jones"; 
+select * from users, products where users.uid == products.pid;

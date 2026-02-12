@@ -62,7 +62,9 @@ public:
     virtual void reset_and_skip() = 0;
 
     virtual void set_key(const Key& key) = 0;
-    virtual void set_key_on_column(const Key& key, const std::string& column_name);
+    virtual bool set_key_on_column(const Key& key, const std::string& column_name);
+
+    virtual void set_to_inner() = 0;
 
     void update_last_deleted_key(const Key& key);
 };
@@ -85,17 +87,17 @@ public:
 
     void reset() override;
     void set_key(const Key& key) override;
-    void set_key_on_column(const Key& key, const std::string& column_name) override;
+    bool set_key_on_column(const Key& key, const std::string& column_name) override;
 
     void reset_and_skip() override;
 
+    void set_to_inner() override;
 private:
     Database& database_;
     const Table& table_;
 
     const Predicate* pred_;
     Key index_key_;
-    bool set_by_join = false;
     bool skipped_ = false;
     bool started = false;
     ScanMode mode_;
@@ -108,6 +110,7 @@ private:
     off_t current_block_location = 0;
 
 
+    bool is_inner_ = false;
 
 
 
@@ -129,8 +132,10 @@ public:
     bool next(Output &output) override;
     void reset() override;
     void set_key(const Key& key) override;
-    void set_key_on_column(const Key& key, const std::string& column_name) override;
+    bool set_key_on_column(const Key& key, const std::string& column_name) override;
     void reset_and_skip() override;
+
+    void set_to_inner() override;
 
 private:
     Database& database_;
@@ -161,6 +166,7 @@ public:
     void set_key(const Key& key) override;
     void reset_and_skip() override;
 
+    void set_to_inner() override;
 
 private:
     Database& database_;

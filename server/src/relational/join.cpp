@@ -55,7 +55,8 @@ bool Join::next(Output &output)
             std::memcpy(k.bytes.data(), &big_endian, 4);
 
             std::string left_col = std::get<ColumnOperand>(join_predicate_->left).column;
-            right_child_->set_key_on_column(k, right_col);
+            if(!right_child_->set_key_on_column(k, right_col))
+                return false;
             has_left_record_ = true;
         }
 
@@ -85,4 +86,10 @@ bool Join::next(Output &output)
             has_left_record_ = false;
         }
     }
+}
+
+
+void Join::set_to_inner()
+{
+    std::cerr << "unexpected"; 
 }

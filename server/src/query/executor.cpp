@@ -258,7 +258,6 @@ void Executor::execute_create_table(AST::CreateTableQuery* query) {
 }
 
 void Executor::execute_insert(AST::InsertQuery* query) {
-    //converting to a transactional model
     if (validateInsertQuery(*query, database) == false)
     {
         return;

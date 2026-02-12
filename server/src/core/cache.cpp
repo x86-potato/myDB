@@ -80,6 +80,28 @@ Page* Cache::read_block(off_t block_off)
     }
 }
 
+void Cache::pin_page(off_t block_off)
+{
+    auto find = page_table.find(block_off);
+    if(find != page_table.end())
+    {
+        NodeLRU* node = lru.page_to_node[block_off];
+        node->pin_count++;
+    }
+}
+
+void Cache::unpin_page(off_t block_off)
+{
+    auto find = page_table.find(block_off);
+    if(find != page_table.end())
+    {
+        NodeLRU* node = lru.page_to_node[block_off];
+        if (node->pin_count > 0) {
+            node->pin_count--;
+        }
+    }
+}
+
 void Cache::write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset) {
     assert(offset + len <= BLOCK_SIZE);
     memcpy(page->buffer + offset, src, len);

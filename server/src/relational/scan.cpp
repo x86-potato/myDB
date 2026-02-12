@@ -8,56 +8,6 @@
 
 
 
-
-
-
-
-bool Scan::in_range(const Key& key, const Predicate& pred)
-{
-    const ColumnOperand& col_op = std::get<ColumnOperand>(pred.left);
-    std::string literal_str = strip_quotes(std::get<LiteralOperand>(pred.right).literal);
-
-    const Type columnType = table_.get_column(col_op.column).type;
-
-    if(cursor_->get_key().bytes.size() == 0) {
-        return false;
-    }
-
-    if (columnType == Type::INTEGER) {
-        // Interpret bytes as int32_t (big endian)
-        int32_t key_val;
-        memcpy(&key_val, key.bytes.data(), sizeof(int32_t));
-        key_val = ntohl(key_val); // convert from big-endian to host
-
-        int32_t literal_val = std::stoi(literal_str);
-
-        switch (pred.op)
-        {
-            case AST::Op::EQ:  return key_val == literal_val;
-            case AST::Op::LT:  return key_val < literal_val;
-            case AST::Op::LTE: return key_val <= literal_val;
-            case AST::Op::GT:  return key_val > literal_val;
-            case AST::Op::GTE: return key_val >= literal_val;
-            default: throw std::runtime_error("Unsupported operation in in_range");
-        }
-    } else {
-        // CHAR/TEXT columns: compare bytes
-        Key literal_key = make_index_key(literal_str, columnType);
-        int cmp = memcmp(key.bytes.data(), literal_key.bytes.data(), literal_key.bytes.size());
-
-        switch (pred.op)
-        {
-            case AST::Op::EQ:  return cmp == 0;
-            case AST::Op::LT:  return cmp < 0;
-            case AST::Op::LTE: return cmp <= 0;
-            case AST::Op::GT:  return cmp > 0;
-            case AST::Op::GTE: return cmp >= 0;
-            default: throw std::runtime_error("Unsupported operation in in_range");
-        }
-    }
-}
-
-
 Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
 : database_(database), table_(table), pred_(predicate) {
     tables_.push_back(&table_);
@@ -157,6 +107,59 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
     }
 }
 
+
+
+
+bool Scan::in_range(const Key& key, const Predicate& pred)
+{
+    const ColumnOperand& col_op = std::get<ColumnOperand>(pred.left);
+    std::string literal_str = strip_quotes(std::get<LiteralOperand>(pred.right).literal);
+
+    const Type columnType = table_.get_column(col_op.column).type;
+
+    if(cursor_->get_key().bytes.size() == 0) {
+        return false;
+    }
+
+    if (columnType == Type::INTEGER) {
+        // Interpret bytes as int32_t (big endian)
+        int32_t key_val;
+        memcpy(&key_val, key.bytes.data(), sizeof(int32_t));
+        key_val = ntohl(key_val); // convert from big-endian to host
+
+        int32_t literal_val = std::stoi(literal_str);
+
+        switch (pred.op)
+        {
+            case AST::Op::EQ:  return key_val == literal_val;
+            case AST::Op::LT:  return key_val < literal_val;
+            case AST::Op::LTE: return key_val <= literal_val;
+            case AST::Op::GT:  return key_val > literal_val;
+            case AST::Op::GTE: return key_val >= literal_val;
+            default: throw std::runtime_error("Unsupported operation in in_range");
+        }
+    } else {
+        // CHAR/TEXT columns: compare bytes
+        Key literal_key = make_index_key(literal_str, columnType);
+        int cmp = memcmp(key.bytes.data(), literal_key.bytes.data(), literal_key.bytes.size());
+
+        switch (pred.op)
+        {
+            case AST::Op::EQ:  return cmp == 0;
+            case AST::Op::LT:  return cmp < 0;
+            case AST::Op::LTE: return cmp <= 0;
+            case AST::Op::GT:  return cmp > 0;
+            case AST::Op::GTE: return cmp >= 0;
+            default: throw std::runtime_error("Unsupported operation in in_range");
+        }
+    }
+}
+
+void Scan::set_to_inner()
+{
+    is_inner_ = true;
+}
+
 void Scan::reset()
 {
     if(mode_ == ScanMode::FULL_SCAN)
@@ -211,16 +214,15 @@ void Scan::set_key(const Key& key)
     }
 }
 
-void Scan::set_key_on_column(const Key& key, const std::string& column_name)
+bool Scan::set_key_on_column(const Key& key, const std::string& column_name)
 {
-    if (!cursor_) return;
+    if (!cursor_) return false;
 
     // Find the column
     int col_idx = table_.get_column_index(column_name);
     const Column& col = table_.get_column(col_idx);
 
     mode_ = ScanMode::INDEX_SCAN;
-    set_by_join = true;
     index_key_ = key;
 
 
@@ -248,7 +250,9 @@ void Scan::set_key_on_column(const Key& key, const std::string& column_name)
 
     cursor_->tree_root = col.indexLocation;
     cursor_->db = &database_;
-    cursor_->set_gte(key);
+    cursor_->table = &const_cast<Table&>(table_);
+    started = false;
+    return cursor_->set_gte(key);
 }
 
 
@@ -294,7 +298,7 @@ bool Scan::next(Output& output)
 {
     output.tuples_.clear();
 
-    if (!started && !skipped_)
+    if (!started && !skipped_ && !is_inner_)
     {
         started = true;
         
@@ -302,7 +306,7 @@ bool Scan::next(Output& output)
             // FIX: Check if set_start failed (empty table)
             if (!cursor_->set_start()) {
                 return false; 
-            }
+        }
         } else {
             bool found = false;
             switch (pred_->op) {
@@ -330,7 +334,7 @@ bool Scan::next(Output& output)
     {
         //continue iterating posting list
     }
-    else if (!skipped_ && mode_ != ScanMode::SECONDARY_INDEX_SCAN)
+    else if (!skipped_ && mode_ != ScanMode::SECONDARY_INDEX_SCAN && !is_inner_)
     {
         if (!cursor_->next())
             return false;
@@ -341,9 +345,29 @@ bool Scan::next(Output& output)
         started = true;
     }
 
+
+    if(is_inner_ && started)
+    {
+        if(!cursor_->next())
+            return false;
+
+        if(cursor_->get_key().bytes == index_key_.bytes)
+        {
+            output.tuples_.push_back({
+                .record = database_.file->get_record(cursor_->get_value(), table_),
+                .location = cursor_->get_value(),
+                .table_ = &table_
+            });
+
+            return true;
+        }    
+        
+        return false;
+    }
+
     if(mode_ == ScanMode::INDEX_SCAN)
     {
-        if (set_by_join)
+        if (is_inner_)
         {
             if (!cursor_->key_equals(index_key_))
                 return false;
@@ -361,6 +385,9 @@ bool Scan::next(Output& output)
             .location = value,
             .table_ = &table_
         });
+
+        if(is_inner_)
+            started = true;
 
         return true;
     }

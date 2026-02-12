@@ -4,24 +4,6 @@
 
 class Mutation
 {
-    enum Type {
-        INSERT,
-        MODIFY,
-        DELETE
-    } type;
-    union
-    {
-        struct {
-            std::string table_name;
-            StringVec values;
-        } insert;
-        struct {
-            std::string table_name;
-
-            Plan plan;
-
-        } update;
-    };
 
 };
 

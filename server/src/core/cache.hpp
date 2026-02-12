@@ -26,6 +26,7 @@ struct NodeLRU
     Page* page_ptr = nullptr;
     off_t block_ptr = 0;
     bool dirty = false;
+    uint pin_count = 0;
 };
 
 
@@ -45,6 +46,9 @@ public:
     Cache& operator=(Cache&&) = delete;
 
     Page* read_block(off_t block_off);
+    void pin_page(off_t block_off);
+    void unpin_page(off_t block_off);
+
     int write_block(off_t block_off);
     Page* insert(off_t block_offset);
 

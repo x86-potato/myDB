@@ -12,6 +12,11 @@ void Filter::add_predicate(const Predicate* pred)
     predicates_.push_back(pred);
 }
 
+void Filter::set_to_inner()
+{
+    child_->set_to_inner();
+}
+
 bool Filter::in_range(Output& to_check)
 {
     for (const auto& pred : predicates_)
@@ -86,9 +91,9 @@ void Filter::set_key(const Key& key)
 {
     child_->set_key(key);
 }
-void Filter::set_key_on_column(const Key& key, const std::string& column_name)
+bool Filter::set_key_on_column(const Key& key, const std::string& column_name)
 {
-    child_->set_key_on_column(key, column_name);
+    return child_->set_key_on_column(key, column_name);
 }
 void Filter::reset_and_skip()
 {

@@ -15,7 +15,7 @@ Database::Database ()
     for (auto table: fetched)
     {
         this->tableMap.insert({table.name, table});
-        table.table_print();
+        //table.table_print();
     }
 
 
@@ -34,7 +34,7 @@ Table& Database::get_table(const std::string& tableName)
 int Database::insert(const std::string& tableName, const StringVec& args)
 {
 
-    file->cache.read_block(0);
+    //file->cache.read_block(0);
     Table &table = tableMap.at(tableName);
     Record record(args, table);
 
