@@ -611,18 +611,11 @@ off_t File::insert_table(Table &table, int txn_id)
     off_t new_table_location = alloc_block();
     txn.allocated_blocks.push_back(new_table_location);
     
-    if(txn.is_page_locked_exclusive(new_table_location) == false)
-    {
-        lock_manager->acquire_exclusive(txn_id, new_table_location);
-        txn.copy_page(new_table_location);
-    }
+    txn.acquire_exclusive_and_copy_if_needed(new_table_location);
+    
     Page* new_table_page = txn.private_cache_read(new_table_location);
 
-    if(txn.is_page_locked_exclusive(header_pointer) == false)
-    {
-        lock_manager->acquire_exclusive(txn_id, header_pointer);
-        txn.copy_page(header_pointer);
-    }
+    txn.acquire_exclusive_and_copy_if_needed(header_pointer);
 
     Page* header_page = txn.private_cache_read(header_pointer);
 
@@ -655,8 +648,7 @@ off_t File::insert_table(Table &table, int txn_id)
     // initialize primary index root for the new table
     off_t location = alloc_block();
 
-    lock_manager->acquire_exclusive(txn_id, location); 
-    txn.copy_page(location);
+    txn.acquire_exclusive_and_copy_if_needed(location);
     txn.allocated_blocks.push_back(location);
     //txn.write_to_page(txn.private_cache_read(location), 0, &table_block, sizeof(Table_Block), location);
 

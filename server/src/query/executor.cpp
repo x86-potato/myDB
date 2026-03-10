@@ -39,7 +39,7 @@ void Executor::execute (const std::string &input, Session& session)
     }
 
     bool auto_commit = false;
-    if (session.current_transaction_id == -1 && queryAST->type != AST::QueryType::Begin)
+    if (session.current_transaction_id == -1 && queryAST->type != AST::QueryType::Begin && !session.is_admin())
     {
         //if txn id is -1, we make a auto commit transaction for this query
         int txn_id = database.create_transaction();
@@ -114,9 +114,8 @@ void Executor::execute (const std::string &input, Session& session)
             break;
     }
 
-    if(auto_commit)
+    if(auto_commit && !session.is_admin())
     {
-        assert(session.current_transaction_id != -1);
         database.commit_transaction(session.current_transaction_id);
         session.set_current_txn(-1);
     }
