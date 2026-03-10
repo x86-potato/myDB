@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <cassert>
 #include <cstring>
+#include <mutex>
+#include <atomic>
+#include <shared_mutex>
 
 
 // Structure representing a memory page
@@ -25,11 +28,35 @@ struct NodeLRU
 
     Page* page_ptr = nullptr;
     off_t block_ptr = 0;
-    bool dirty = false;
-    uint pin_count = 0;
+    
+    std::atomic<bool> dirty = false;
+
+
+    std::atomic<int> pin_count = 0;
+    std::shared_mutex rw_latch; // Mutex for synchronizing access to the page
+
+
 };
 
+class Cache;
 
+class LRU
+{
+public:
+    NodeLRU nodes[CACHE_PAGE_LIMIT];
+    std::unordered_map<off_t, NodeLRU*> page_to_node;
+    int allocated_count = 0;
+    NodeLRU *head = nullptr;
+    NodeLRU *tail = nullptr;
+    Cache *cache;
+
+    LRU();
+
+    Page* insert(Page* page, off_t block_offset, std::unordered_map<off_t, Page*>& page_table);
+    void move_to_head(NodeLRU* node);
+    void flush_all();
+    void print_LRU_list();
+};
 
 class Cache
 {
@@ -37,6 +64,11 @@ public:
     int filefd = -1;
     int cache_miss_counter = 0;
     int cache_hit_counter = 0;
+
+    std::mutex cache_lock;
+
+    LRU lru;
+
 
     Cache();
 
@@ -53,6 +85,7 @@ public:
     Page* insert(off_t block_offset);
 
     void write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset);
+    
 
     void WAL();
 
@@ -63,25 +96,7 @@ private:
     bool cache_index_in_use[CACHE_PAGE_LIMIT] = {false};
     std::unordered_map<off_t, Page*> page_table;
 
-    class LRU
-    {
-    public:
-        NodeLRU nodes[CACHE_PAGE_LIMIT];
-        std::unordered_map<off_t, NodeLRU*> page_to_node;
-        int allocated_count = 0;
-        NodeLRU *head = nullptr;
-        NodeLRU *tail = nullptr;
-        Cache *cache;
 
-        LRU();
-
-        Page* insert(Page* page, off_t block_offset, std::unordered_map<off_t, Page*>& page_table);
-        void move_to_head(NodeLRU* node);
-        void flush_all();
-        void print_LRU_list();
-    };
-
-    LRU lru;
 
     std::byte* pre_allocate(size_t bytes);
 };

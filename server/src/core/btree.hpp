@@ -8,7 +8,7 @@
 #include "../config.h"
 #include "../storage/file.hpp"
 #include "../core/table.hpp"
-
+#include "../transactions/transaction.hpp"
 
 template<size_t KeySize, size_t MaxKeys>
 struct Node {
@@ -60,11 +60,11 @@ public:
     using NodeType = NodeT;
     using LeafNodeType = LeafNodeT;
     using InternalNodeType = InternalNodeT;
-    NodeT* root_node = nullptr;
+    //NodeT* root_node = nullptr;
     File *file = nullptr;
     Table* table = nullptr;
 
-    off_t tree_root = 0;
+    //off_t tree_root = 0;
     static constexpr int MaxKeys= []() {
         if constexpr (std::is_same_v<NodeT, Node8>) return MaxKeys_8;
         else if constexpr (std::is_same_v<NodeT, Node4>) return MaxKeys_4;
@@ -90,36 +90,48 @@ public:
     BtreePlus(File *file);
 
     //@brief insertes string a and corresponding value b
-    void insert(std::string insert_string, off_t &record_location);
+    void insert(
+        std::string insert_string, 
+        off_t &record_location,
+        off_t root_location,
+        int txn_id);
 
     //@brief deletes a key and its value
-    int delete_key(std::string delete_string, off_t record_location);
+    int delete_key(
+        std::string delete_string, 
+        off_t record_location,
+        off_t root_location,
+        int txn_id);
 
 
-    LocationData<LeafNodeType> locate_exact(std::string key);
-    LocationData<LeafNodeType> locate_gte(std::string key);
-    LocationData<LeafNodeType> locate_gt(std::string key);
+    LocationData<LeafNodeType> locate_exact(
+        std::string key, off_t root_location, int txn);
+    LocationData<LeafNodeType> locate_gte(
+        std::string key, off_t root_location, int txn);
+    LocationData<LeafNodeType> locate_gt(
+        std::string key, off_t root_location, int txn);
 
-    LocationData<LeafNodeType> locate_start();
+    LocationData<LeafNodeType> locate_start(off_t root_location, int txn);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
-    std::vector<off_t> search(std::string search_string);
+    std::vector<off_t> search(std::string search_string, off_t root_location);
 
     //@brief checks if the tree contains a certian key
-    bool has_key(const std::string &key);
+    //@also responsible for locking the path to the key if it exists, caller is responsible for unlocking
+    bool has_key(const std::string &key, Transaction& txn, off_t root_location);
 
     //@brief prints current objects tree, assumes roo_node is defined and loaded
     void print_tree();
 
     //@brief creates the first node and loads it to the cache.
-    void init_root(off_t &location);
+    void init_root(off_t location, int txn_id);
 
     //@brief returns LeafNode Type of the furthest left node
-    LeafNodeT* find_leftmost_leaf();
+    LeafNodeT* find_leftmost_leaf(off_t root_location);
 
 
     //@brief update the value associated with a key
-    void update_value(std::string key, off_t new_value);
+    void update_value(std::string key, off_t new_value, off_t root_location, int txn_id);
 private:
     //----------handle deletion----------------
     bool check_underflow(NodeT* node);
@@ -135,14 +147,14 @@ private:
     void borrow_right_leaf(NodeT* current, NodeT* right);
 
     //----------handle insertion----------------
-    void insert_up_into(Insert_Up_Data data,off_t node_location);
-    void split_leaf(NodeT* node);
-    void split_internal(NodeT* node);
-    void insert_key_into_node(Insert_Up_Data data, NodeT* node);
-    void push_into_internal(InternalNodeT* target, char* value);
+    void insert_up_into(Insert_Up_Data data,off_t node_location, int txn_id);
+    void split_leaf(NodeT* node, int txn_id);
+    void split_internal(NodeT* node, int txn_id);
+    void insert_key_into_node(Insert_Up_Data data, NodeT* node, int txn_id);
+    void push_into_internal(InternalNodeT* target, char* value, int txn_id);
 
     //----------utill functions----------------
-    LeafNodeT* traverse_to_leaf(char* to_search);
+    LeafNodeT* traverse_to_leaf(char* to_search, off_t start_location, int txn_id);
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int get_first_key_index_gte(char* to_locate, LeafNodeT* node);

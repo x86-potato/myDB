@@ -6,8 +6,10 @@ Executor::Executor (Database &database) : database(database)
 }
 
 
-void Executor::execute (const std::string &input)
+void Executor::execute (const std::string &input, Session& session)
 {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     std::vector<Token> tokenList;
     std::unique_ptr<AST::Query> queryAST;
 
@@ -20,44 +22,69 @@ void Executor::execute (const std::string &input)
 
     if (output.code != 0) return;
 
+    if(session.is_admin() && true == false) {
+        switch (queryAST->type) {
+            case AST::QueryType::Insert:
+            case AST::QueryType::Delete:
+            case AST::QueryType::Update:
+            case AST::QueryType::Select:
+            case AST::QueryType::Load:
+            case AST::QueryType::Run:
+            case AST::QueryType::Begin:
+            case AST::QueryType::Commit:
+            case AST::QueryType::Rollback:
+                std::cout << "Error: Query type not allowed in admin CLI." << std::endl;
+                return;
+        }
+    }
+
+    bool auto_commit = false;
+    if (session.current_transaction_id == -1 && queryAST->type != AST::QueryType::Begin)
+    {
+        //if txn id is -1, we make a auto commit transaction for this query
+        int txn_id = database.create_transaction();
+        session.set_current_txn(txn_id);
+
+        auto_commit = true;
+    }
+
+
     switch (queryAST->type) {
         case AST::QueryType::CreateTable:
             execute_create_table(
-                static_cast<AST::CreateTableQuery*>(queryAST.get())
+                static_cast<AST::CreateTableQuery*>(queryAST.get()),
+                session
             );
             break;
         case AST::QueryType::Insert:
             execute_insert(
-                static_cast<AST::InsertQuery*>(queryAST.get())
+                static_cast<AST::InsertQuery*>(queryAST.get()), session.current_transaction_id
             );
             break;
         case AST::QueryType::Delete:
             execute_delete(
-                static_cast<AST::DeleteQuery*>(queryAST.get())
+                static_cast<AST::DeleteQuery*>(queryAST.get()), session
             );
             break;
         case AST::QueryType::Update:
             execute_update(
-                static_cast<AST::UpdateQuery*>(queryAST.get())
+                static_cast<AST::UpdateQuery*>(queryAST.get()), session
             );
             break;
 
         case AST::QueryType::Select:
-            //AST::print_select_query_tree(
-            //    *(static_cast<AST::SelectQuery*>(queryAST.get()))
-            //);
             execute_select(
-                static_cast<AST::SelectQuery*>(queryAST.get())
+                static_cast<AST::SelectQuery*>(queryAST.get()), session
             );
             break;
         case AST::QueryType::Load:
             execute_load(
-                static_cast<AST::LoadQuery*>(queryAST.get())
+                static_cast<AST::LoadQuery*>(queryAST.get()), session
             );
             break;
         case AST::QueryType::Run:
             execute_run(
-                static_cast<AST::RunQuery*>(queryAST.get())
+                static_cast<AST::RunQuery*>(queryAST.get()), session
             );
             break;
         case AST::QueryType::CreateIndex:
@@ -70,8 +97,36 @@ void Executor::execute (const std::string &input)
                 static_cast<AST::ShowQuery*>(queryAST.get())
             );
             break;
-
+        case AST::QueryType::Switch:
+            execute_switch(
+                static_cast<AST::SwitchQuery*>(queryAST.get()), session
+            );
+            break;
+        case AST::QueryType::Begin:
+            execute_begin(
+                static_cast<AST::BeginQuery*>(queryAST.get()), session
+            ); 
+            break;
+        case AST::QueryType::Commit:
+            execute_commit(
+                static_cast<AST::CommitQuery*>(queryAST.get()), session
+            ); 
+            break;
     }
+
+    if(auto_commit)
+    {
+        assert(session.current_transaction_id != -1);
+        database.commit_transaction(session.current_transaction_id);
+        session.set_current_txn(-1);
+    }
+
+
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    std::cout << "\nExecution time: " << elapsed.count() << " for Session: "<< session.session_id  <<"\n";
 }
 
 void Executor::execute_show(AST::ShowQuery* query) {
@@ -133,27 +188,31 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     );
 }
 
-void Executor::execute_update(AST::UpdateQuery* query) {
+void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
+
 
     Plan plan(query->tableName, query->condition);
+
+    Transaction& txn = database.transactions.at(session.current_transaction_id);
 
     if(plan.paths.size() == 0)
     {
         Path temp = Path{};
-        Pipeline plan_executor(temp, database);
+        Pipeline plan_executor(temp, database, &txn);
 
         plan_executor.ExecuteUpdate(query->args);
     }
     else
     {
-        Pipeline plan_executor(plan.paths[0], database);
+        Pipeline plan_executor(plan.paths[0], database, &txn);
 
         plan_executor.ExecuteUpdate(query->args);
     }
 }
 
-void Executor::execute_select(AST::SelectQuery* query) {
+void Executor::execute_select(AST::SelectQuery* query, Session& session) {
     //AST::print_select_query_tree(*query);
+    Transaction& txn = database.transactions.at(session.current_transaction_id);
 
     Plan plan(*query);
     if (validatePlan(plan, database) == false)
@@ -166,19 +225,19 @@ void Executor::execute_select(AST::SelectQuery* query) {
     if(plan.paths.size() == 0)
     {
         Path temp = Path{};
-        Pipeline plan_executor(temp, database);
+        Pipeline plan_executor(temp, database, &txn);
 
         plan_executor.Execute();
     }
     else
     {
-        Pipeline plan_executor(plan.paths[0], database);
+        Pipeline plan_executor(plan.paths[0], database, &txn);
 
         plan_executor.Execute();
     }
 }
 
-void Executor::execute_load(AST::LoadQuery* query) {
+void Executor::execute_load(AST::LoadQuery* query, Session& session) {
     // Debug: print current working directory
     std::string filename = query->fileName;
     if (filename.front() == '"' && filename.back() == '"') {
@@ -223,7 +282,7 @@ void Executor::execute_load(AST::LoadQuery* query) {
         }
 
         // Insert the row into the database
-        if(database.insert(query->tableName, values) == 0)
+        if(database.insert(query->tableName, values, session.current_transaction_id) == 0)
         {
             successCount++;
         }
@@ -235,7 +294,7 @@ void Executor::execute_load(AST::LoadQuery* query) {
               << query->tableName << std::endl;
 }
 
-void Executor::execute_create_table(AST::CreateTableQuery* query) {
+void Executor::execute_create_table(AST::CreateTableQuery* query, Session& session) {
     if (validateCreateTableQuery(*query, database) == false)
     {
         return;
@@ -253,15 +312,30 @@ void Executor::execute_create_table(AST::CreateTableQuery* query) {
         newTable.columns.push_back(newColumn);
     }
 
-    database.file->insert_table<Node32, Node16, Node8, Node4>(newTable);
+    int txn_id = database.create_transaction();
+    session.set_current_txn(txn_id);
+
+    database.file->insert_table<Node32, Node16, Node8, Node4>(newTable, txn_id);
     database.tableMap.insert({query->tableName, newTable});
+
+    txn_id = database.commit_transaction(txn_id);
+    database.file->cache.flush_cache(); 
+    session.set_current_txn(-1);
 }
 
-void Executor::execute_insert(AST::InsertQuery* query) {
+void Executor::execute_insert(AST::InsertQuery* query, int txn_id) {
+    
+    if(txn_id == -1)
+    {
+        std::cout << "Error: No active transaction for insert operation." << std::endl;
+        return;
+    }
+
     if (validateInsertQuery(*query, database) == false)
     {
         return;
     }
+
 
     StringVec values;
 
@@ -272,10 +346,16 @@ void Executor::execute_insert(AST::InsertQuery* query) {
 
     std::string tableName = query->tableName;
 
-    database.insert(tableName, values);
+    int result = database.insert(tableName, values, txn_id);
+
+    if(result != 0)
+    {
+        std::cout << "Error: Insert operation failed for table " << tableName << std::endl;
+        std::cout << "Transaction has been rolled back." << std::endl;
+    }
 }
 
-void Executor::execute_delete(AST::DeleteQuery* query) {
+void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
     if (validateDeleteQuery(*query, database) == false)
     {
        return;
@@ -285,12 +365,13 @@ void Executor::execute_delete(AST::DeleteQuery* query) {
     {
        return;
     }
+    Transaction* txn = &database.transactions.at(session.current_transaction_id);
 
     const std::string &tableName = query->tableName;
-    database.erase(tableName, plan);
+    database.erase(tableName, plan, txn);
 }
 
-void Executor::execute_run(AST::RunQuery* query) {
+void Executor::execute_run(AST::RunQuery* query, Session& session) {
     std::string filename = query->fileName;
     if (filename.front() == '"' && filename.back() == '"') {
         filename = filename.substr(1, filename.length() - 2);
@@ -317,10 +398,49 @@ void Executor::execute_run(AST::RunQuery* query) {
         query_str.erase(query_str.find_last_not_of(" \t\r\n") + 1);
 
         if (!query_str.empty()) {
-            execute(query_str + ";");
+            execute(query_str + ";", session); // Add semicolon back for proper parsing
         }
 
         start = end + 1;
         end = content.find(';', start);
     }
+}
+
+void Executor::execute_switch(AST::SwitchQuery* query, Session& session) {
+    std::string session_id = query->session_id;
+
+    int session_id_int = stoi(query->session_id);
+    // For demonstration, we'll just print the session switch action.
+    // In a real implementation, this would involve more complex session management logic.
+    std::cout << "Switching to session: " << session_id_int << std::endl;
+
+}
+
+void Executor::execute_begin(AST::BeginQuery* query, Session& session) {
+    int txn_id = database.create_transaction();
+    std::cout << "Transaction " << txn_id << " started." << std::endl;
+
+    session.set_current_txn(txn_id);    
+
+}
+
+void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
+    int txn_id = session.current_transaction_id;
+
+    if(txn_id == -1)
+    {
+        std::cout << "Error: No active transaction to commit." << std::endl;
+        return;
+    }
+
+    int result = database.commit_transaction(txn_id);
+
+    if(result != 0)
+    {
+        std::cout << "Error: Commit operation failed for transaction " << txn_id << std::endl;
+        return;
+    }
+
+    std::cout << "Transaction " << txn_id << " committed successfully." << std::endl;
+    session.set_current_txn(-1);
 }

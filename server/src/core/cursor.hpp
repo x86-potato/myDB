@@ -14,6 +14,7 @@ public:
     Database* db = nullptr;
     int column_index = 0; //to do, only works for primairy column
     Table* table = nullptr;
+    Transaction* txn = nullptr;
 
     virtual bool next() = 0;
     virtual ~TreeCursor() = default;
@@ -25,9 +26,9 @@ public:
     virtual void skip_read_leaves() = 0;
     virtual void commit_progress() = 0;
 
-    virtual bool set_start() = 0;
-    virtual bool set_gt(const Key& key) = 0;
-    virtual bool set_gte(const Key& key) = 0;
+    virtual bool set_start(off_t start_root_location) = 0;
+    virtual bool set_gt(const Key& key, off_t start_root_location) = 0;
+    virtual bool set_gte(const Key& key, off_t start_root_location) = 0;
 
     virtual bool key_equals(const Key& check) = 0;
 };
@@ -46,7 +47,7 @@ public:
 
 
     BPlusTreeCursor() = default;
-    BPlusTreeCursor(TreeType* tree);
+    BPlusTreeCursor(TreeType* tree, Transaction* txn);
 
     off_t get_value() const override;
     const Key& get_key() const override;
@@ -56,9 +57,9 @@ public:
     void skip_read_leaves() override;
     void commit_progress() override;
 
-    bool set_start() override;
-    bool set_gte(const Key& key) override;
-    bool set_gt(const Key& key) override;
+    bool set_start(off_t start_root_location) override;
+    bool set_gte(const Key& key, off_t start_root_location) override;
+    bool set_gt(const Key& key, off_t start_root_location) override;
 
     bool key_equals(const Key& check) override;
     void update_key_and_value();

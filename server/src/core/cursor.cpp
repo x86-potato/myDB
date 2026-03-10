@@ -10,9 +10,10 @@ inline void normalize_key(Key& k, size_t key_len) {
 
 
 template <typename TreeType>
-BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* tree)
+BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* tree, Transaction* txn)
 {
     this->tree = tree;
+    this->txn = txn;
 }
 
 
@@ -40,9 +41,11 @@ bool BPlusTreeCursor<TreeType>::next() {
         else 
         {
             //load next 
+            assert(txn != nullptr);
+
             location.leaf = static_cast<typename TreeType::LeafNodeType*>(
                 tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf
+                location.leaf->next_leaf, txn->txn_id
                 )
             );
             leaves_read++;
@@ -73,7 +76,7 @@ void BPlusTreeCursor<TreeType>::skip_read_leaves()
     {
         location.leaf = static_cast<typename TreeType::LeafNodeType*>(
             tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf
+                location.leaf->next_leaf, txn->txn_id
             )
         );
         location.key_index = 0;
@@ -98,18 +101,18 @@ void BPlusTreeCursor<TreeType>::commit_progress()
 }
 
 template <typename TreeType>
-bool BPlusTreeCursor<TreeType>::set_start()
+bool BPlusTreeCursor<TreeType>::set_start(off_t start_root_location)
 {
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
+    //tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = start_root_location;
 
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+    //tree->root_node =
+    //    tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
 
 
 
-    location = tree->locate_start();
-    if (location.key_index == -1 || location.leaf == nullptr || tree->root_node->current_key_count == 0)
+    location = tree->locate_start(tree_root, txn->txn_id);
+    if (location.key_index == -1 || location.leaf == nullptr)
     {
         return false;
     }
@@ -121,17 +124,15 @@ bool BPlusTreeCursor<TreeType>::set_start()
 
 
 template <typename TreeType>
-bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
+bool BPlusTreeCursor<TreeType>::set_gte(const Key& key, off_t start_root_location)
 {
     //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+    //tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = start_root_location;
 
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen));
+    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, txn->txn_id);
     if (location.key_index == -1)
     {
         return false;
@@ -141,17 +142,15 @@ bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
     return true;
 }
 template <typename TreeType>
-bool BPlusTreeCursor<TreeType>::set_gt(const Key &key)
+bool BPlusTreeCursor<TreeType>::set_gt(const Key &key, off_t start_root_location)
 {
     //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+    //tree->tree_root = table->columns[column_index].indexLocation;
+    this->tree_root = start_root_location;
 
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), k.bytes.size()));
+    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, txn->txn_id);
 
     if(location.key_index == -1)
     {

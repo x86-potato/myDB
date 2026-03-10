@@ -1,5 +1,6 @@
 #include "../config.h"
 #include "table.hpp"
+#include <cstring>
 
 namespace TypeUtil {
 
@@ -78,43 +79,87 @@ Table::Table(std::byte* data, int len)
     const std::byte delimiter = static_cast<std::byte>(0x1F);
     const std::byte table_end = static_cast<std::byte>(0x1E);
 
-    std::string buffer;
-    Column new_column;
-    enum State { TABLE_NAME, COL_NAME, COL_TYPE, COL_INDEX } state = TABLE_NAME;
+    if (data == nullptr || len <= 0) {
+        return;
+    }
 
-    for (int i = 0; i < len; i++) {
-        std::byte b = data[i];
+    int pos = 0;
 
-        if (b == delimiter || b == table_end) {
-            switch (state) {
-                case TABLE_NAME:
-                    name = buffer;
-                    state = COL_NAME;
-                    break;
-                case COL_NAME:
-                    new_column.name = buffer;
-                    state = COL_TYPE;
-                    break;
-                case COL_TYPE:
-                    new_column.type = static_cast<Type>(buffer[0]);
-                    state = COL_INDEX;
-                    break;
-                case COL_INDEX:
-                    if (!buffer.empty()) {
-                        new_column.indexLocation = *reinterpret_cast<off_t*>(&buffer[0]);
-                    }
-                    columns.push_back(new_column);
-                    new_column = Column();
-                    state = COL_NAME;
-                    break;
-            }
-            buffer.clear();
-
-            if (b == table_end)
-                break;
-        } else {
-            buffer += static_cast<char>(b);
+    auto read_text_until_delimiter = [&](std::string& out) -> bool {
+        out.clear();
+        while (pos < len && data[pos] != delimiter && data[pos] != table_end) {
+            out += static_cast<char>(data[pos]);
+            ++pos;
         }
+
+        if (pos >= len || data[pos] != delimiter) {
+            return false;
+        }
+
+        ++pos;
+        return true;
+    };
+
+    if (!read_text_until_delimiter(name)) {
+        return;
+    }
+
+    if (pos + static_cast<int>(sizeof(current_record_block_location)) > len) {
+        return;
+    }
+    std::memcpy(&current_record_block_location, data + pos, sizeof(current_record_block_location));
+    pos += static_cast<int>(sizeof(current_record_block_location));
+    if (pos >= len || data[pos] != delimiter) {
+        return;
+    }
+    ++pos;
+
+    if (pos + static_cast<int>(sizeof(row_count)) > len) {
+        return;
+    }
+    std::memcpy(&row_count, data + pos, sizeof(row_count));
+    pos += static_cast<int>(sizeof(row_count));
+    if (pos >= len || data[pos] != delimiter) {
+        return;
+    }
+    ++pos;
+
+    while (pos < len && data[pos] != table_end) {
+        Column col;
+
+        if (!read_text_until_delimiter(col.name)) {
+            break;
+        }
+
+        if (pos >= len || data[pos] == table_end) {
+            break;
+        }
+        col.type = static_cast<Type>(data[pos]);
+        ++pos;
+
+        if (pos >= len || data[pos] != delimiter) {
+            break;
+        }
+        ++pos;
+
+        if (pos + static_cast<int>(sizeof(col.indexLocation)) > len) {
+            break;
+        }
+        std::memcpy(&col.indexLocation, data + pos, sizeof(col.indexLocation));
+        pos += static_cast<int>(sizeof(col.indexLocation));
+
+        if (pos < len && data[pos] == delimiter) {
+            ++pos;
+            columns.push_back(col);
+            continue;
+        }
+
+        if (pos < len && data[pos] == table_end) {
+            columns.push_back(col);
+            break;
+        }
+
+        break;
     }
 }
 
@@ -122,6 +167,8 @@ Table::Table(std::byte* data, int len)
 void Table::table_print()
 {
     std::cout << "\ntable name: " << name << std::endl;
+    std::cout << "current record block location: " << current_record_block_location << std::endl;
+    std::cout << "row count: " << row_count << std::endl;
     for (const auto &i : columns) {
         std::cout << "column: " << i.name << " " << TypeUtil::type_to_string(i.type) << i.indexLocation << std::endl;
     }
@@ -159,6 +206,18 @@ std::vector<std::byte> cast_to_bytes(Table *table)
     // push table name
     for (auto &c : table->name)
         output.push_back(static_cast<std::byte>(c));
+    output.push_back(delimiter);
+
+    // push current record block location
+    std::byte *recordBlockParser = reinterpret_cast<std::byte*>(&table->current_record_block_location);
+    for (int i = 0; i < sizeof(table->current_record_block_location); i++)
+        output.push_back(recordBlockParser[i]);
+    output.push_back(delimiter);
+
+    // push row count
+    std::byte *rowCountParser = reinterpret_cast<std::byte*>(&table->row_count);
+    for (int i = 0; i < sizeof(table->row_count); i++)
+        output.push_back(rowCountParser[i]);
     output.push_back(delimiter);
 
     // push columns

@@ -149,7 +149,7 @@ void Pipeline::build_forest()
     {
         Predicate* scan_predicate = pick_scan_predicate(table_name);
         const Table &table = database_.get_table(table_name);
-        auto scan_op = std::make_unique<Scan>(database_, table, scan_predicate);
+        auto scan_op = std::make_unique<Scan>(database_, table, scan_predicate, txn);
 
         //also build filter if needed
         if (check_if_filter_needed(table_name))
@@ -228,7 +228,8 @@ void Pipeline::compress_forest()
     }
 }
 
-Pipeline::Pipeline(Path &path, Database& database) :  path_(path), database_(database)
+Pipeline::Pipeline(Path &path, Database& database, Transaction* txn) 
+:  path_(path), database_(database), txn(txn)
 {
     build_buckets();
     sort_buckets();
@@ -259,7 +260,7 @@ void Pipeline::ExecuteDelete()
 
     while (root->next(output))
     {
-        if(database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table) != 0) {
+        if(database_.file->delete_record(output.tuples_[0].record,output.tuples_[0].location, table, 0) != 0) {
             break;
         }
         deleted_count++;
@@ -289,7 +290,7 @@ void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
                 output.tuples_[0].record,
                 output.tuples_[0].location,
                 index,arg->value, 
-                &table);
+                &table, 0);
         }
         modified_count++;
     }

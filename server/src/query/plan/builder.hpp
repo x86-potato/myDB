@@ -4,6 +4,7 @@
 #include "../../config.h"
 #include "../../relational/operations.hpp"
 #include <variant>
+#include "../../transactions/transaction.hpp"
 #include "planner.hpp"
 
 class Operator;
@@ -14,7 +15,7 @@ class Join;
 class Pipeline
 {
 public:
-    Pipeline(Path &path, Database& database);
+    Pipeline(Path &path, Database& database, Transaction* txn);
 
     void ExecuteDelete();
     void ExecuteUpdate(std::vector<AST::UpdateArg> &update_args);
@@ -30,6 +31,7 @@ public:
 private:
     Path path_; //work on a copy
     Database& database_;
+    Transaction* txn;
 
 
     bool check_if_indexed(const Predicate &predicate);

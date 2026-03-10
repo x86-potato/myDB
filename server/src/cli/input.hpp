@@ -1,13 +1,18 @@
 #pragma once
 
 #include "../query/executor.hpp"
+#include "../server/server.hpp"
 #include <string>
 #include <vector>
+#include <thread>
+
+class Executor;
+class Server;
 
 class CLI {
 public:
-    explicit CLI(Executor& executor);
-    void run();  // Starts the interactive loop
+    CLI(Executor& executor);
+    void run(Server& server);  // Starts the interactive loop
 
 private:
     Executor& executor_;

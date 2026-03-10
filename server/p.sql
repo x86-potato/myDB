@@ -1,1 +1,0 @@
-select * from users, products where users.uid == products.pid;

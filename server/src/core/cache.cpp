@@ -65,11 +65,14 @@ Page* Cache::insert(off_t block_offset)
 
 Page* Cache::read_block(off_t block_off)
 {
+    std::lock_guard<std::mutex> lock(cache_lock);
+
     auto find = page_table.find(block_off);
     if(find == page_table.end())
     {
         cache_miss_counter++;
-        return insert(block_off);      
+        Page* output = insert(block_off);
+        return output;      
     }
     else
     {
@@ -137,20 +140,28 @@ std::byte* Cache::pre_allocate(size_t bytes)
 }
 
 
-Cache::LRU::LRU() : allocated_count(0), head(nullptr), tail(nullptr), cache(nullptr) {}
+LRU::LRU() : allocated_count(0), head(nullptr), tail(nullptr), cache(nullptr) {}
 
-Page* Cache::LRU::insert(Page* page, off_t block_offset, std::unordered_map<off_t, Page*>& page_table)
+Page* LRU::insert(Page* page, off_t block_offset, std::unordered_map<off_t, Page*>& page_table)
 {
     if (head == nullptr) 
     {
-        nodes[0] = NodeLRU{nullptr, nullptr, page, block_offset, false};
+        //nodes[0] = NodeLRU{nullptr, nullptr, page, block_offset, false, 0, std::shared_mutex()};
+        nodes[0].page_ptr = page;
+        nodes[0].block_ptr = block_offset;
+        
         head = &nodes[0];
         tail = &nodes[0];
         allocated_count = 1;
     } 
     else if (allocated_count < CACHE_PAGE_LIMIT) 
     {
-        nodes[allocated_count] = NodeLRU{head, nullptr, page, block_offset, false};
+        //nodes[allocated_count] = NodeLRU{head, nullptr, page, block_offset, false, 0, std::shared_mutex()};
+        nodes[allocated_count].page_ptr = page;
+        nodes[allocated_count].block_ptr = block_offset;
+        nodes[allocated_count].next = head;
+        nodes[allocated_count].prev = nullptr;
+
         if (head) head->prev = &nodes[allocated_count];
         head = &nodes[allocated_count];
         allocated_count++;
@@ -180,7 +191,7 @@ Page* Cache::LRU::insert(Page* page, off_t block_offset, std::unordered_map<off_
     return head->page_ptr;
 }
 
-void Cache::LRU::move_to_head(NodeLRU* node) {
+void LRU::move_to_head(NodeLRU* node) {
     if (node == head) return;  
     if (node->prev) node->prev->next = node->next;
     if (node->next) node->next->prev = node->prev;
@@ -192,7 +203,7 @@ void Cache::LRU::move_to_head(NodeLRU* node) {
     head = node;
 }
 
-void Cache::LRU::flush_all() {
+void LRU::flush_all() {
     for (auto& node : nodes) {
         if (node.page_ptr && node.dirty) {
             cache->write_block(node.block_ptr);
@@ -200,7 +211,7 @@ void Cache::LRU::flush_all() {
     }
 }
 
-void Cache::LRU::print_LRU_list() 
+void LRU::print_LRU_list() 
 {
     NodeLRU* curr = head;
     std::cout << "LRU List (head -> tail):\n";

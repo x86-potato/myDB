@@ -16,11 +16,14 @@
 #include "../core/table.hpp"
 #include "record.hpp"
 #include "../core/btree.hpp"
+#include "../transactions/transaction.hpp"
+#include "../transactions/manager.hpp"
 
 
 
 #define HEADER_TABLE_LOCATION 0
 #define HEADER_ROOT_DATA_LOCATION 8
+#define DATA_NODE_METADATA_SIZE 24
 
 // Forward declarations to avoid circular dependencies
 
@@ -44,6 +47,12 @@ struct Data_Node {
     off_t overflow = false;
 
     std::byte padding[4072] = {std::byte(0)};
+};
+
+struct Table_Block
+{
+    off_t next_table_block = -1;
+    std::byte padding[4088] = {std::byte(0)};
 };
 
 struct Posting_Block
@@ -73,14 +82,18 @@ public:
     Cache cache;
 
     off_t header_pointer;
-    off_t table_block_pointer;
-    off_t free_data_pointer;
+    off_t free_linked_list_head = 0;
+    off_t table_linked_list_head = 0;
 
     int index_block_count = 0;
     int data_blocks_count = 0;
 
 
+
     Database *database;
+    LockManager *lock_manager;
+
+    std::mutex allocation_mutex; // Mutex for synchronizing block allocation 
 
 
     File();
@@ -91,10 +104,11 @@ public:
 
 
     template <typename MyBtree>
-    off_t insert_primary_index(std::string key,Record &record, MyBtree &tree, Table &table);
+    off_t insert_primary_index(
+        std::string key,Record &record, MyBtree &tree, Table &table, int txn_id);
 
     template <typename MyBtree>
-    void insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int index);
+    void insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int index, int txn_id);
 
     template <typename PrimaryTree>
     void parse_primary_tree(PrimaryTree &tree);
@@ -121,15 +135,18 @@ public:
     off_t alloc_block();
 
     template<typename NodeT>
-    void update_node(NodeT *node, off_t node_location, size_t size);
+    void update_node(NodeT *node, off_t node_location, size_t size, int txn_id);
 
     template<typename LeafNodeT>
     void update_leafnode(LeafNodeT *node, off_t node_location);
 
     void update_root_pointer(Table* table, off_t old_location, off_t new_location);
 
+    void update_root_pointer(off_t old_location, off_t new_location);
+
     template<typename NodeT>
-    NodeT* load_node(off_t disk_offset);
+    NodeT* load_node(off_t disk_offset, int txn_id);
+
 
     template<typename BtreeT>
     void print_leaves(off_t disk_node_offset);
@@ -137,13 +154,13 @@ public:
     off_t update_table_index_location(Table &table, int column_index, off_t new_index_value);
 
     template <typename Node32,typename Node16, typename Node8, typename Node4>
-    off_t insert_table(Table &table);
-    std::vector<Table> load_table();
+    off_t insert_table(Table &table, int txn_id);
+    std::vector<Table> load_tables();
 
-    int update_record(Record &original_record,off_t location, int column_index, std::string &value, Table* table);
-    off_t write_record(Record &record);
-    Record get_record(off_t record_location, const Table& table);
-    int delete_record(const Record &record, off_t location, const Table& table);
+    int update_record(Record &original_record,off_t location, int column_index, std::string &value, Table* table, int txn_id);
+    off_t write_record(Record &record, int txn_id, Table& table);
+    Record get_record(off_t record_location, const Table& table, Transaction* txn = nullptr);
+    int delete_record(const Record &record, off_t location, const Table& table, int txn_id);
 
     Posting_Block *load_posting_block(off_t location);
 
@@ -152,9 +169,9 @@ private:
     void init_table_block(off_t location);
 
     template<typename NodeT>
-    void init_node(off_t location);
+    void init_node(off_t location, int txn_id);
 
-    void init_data_node(off_t location);
+    void init_data_node(off_t location, int txn_id);
 
     void init_posting_block(off_t location);
     void update_posting_block(off_t location, Posting_Block *block);

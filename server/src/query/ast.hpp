@@ -20,7 +20,12 @@ namespace AST
         Select,
         Load,
         Run,
-        Show
+        Show,
+
+        Switch, 
+        Begin,
+        Commit,
+        Rollback
     };
 
     struct Query
@@ -121,10 +126,24 @@ namespace AST
     struct ShowQuery : Query
     {
     };
+    struct SwitchQuery : Query
+    {
+        string session_id;
+    };
     struct DeleteQuery: Query
     {
         string tableName;
         Condition condition;
+    };
+    struct BeginQuery : Query
+    {
+    };
+    struct CommitQuery : Query
+    {
+    };
+    struct RollbackQuery : Query
+    {
+
     };
 
 

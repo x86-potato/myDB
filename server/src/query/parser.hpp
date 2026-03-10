@@ -55,6 +55,10 @@ private:
     ParserReturn parseDelete();
     ParserReturn parseLoad();
     ParserReturn parseRun();
+    ParserReturn parseSwitch();
+    ParserReturn parseBegin();
+    ParserReturn parseCommit();
+    ParserReturn parseRollback();
 
 
 public:

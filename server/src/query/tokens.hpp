@@ -17,6 +17,8 @@ enum class TokenType
     KW_UPDATE,
     KW_COMMIT,
     KW_ROLLBACK,
+    //@switch session
+    KW_SWITCH,  
 
 
 
@@ -117,7 +119,7 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::KW_RUN:                 return "KW_RUN";
         case TokenType::KW_UPDATE:              return "KW_UPDATE";
         case TokenType::KW_SHOW:                return "KW_SHOW";
-
+        case TokenType::KW_SWITCH:              return "KW_SWITCH";
 
         case TokenType::KW_WHERE:               return "KW_WHERE";
         case TokenType::KW_MODIFY:              return "KW_MODIFY";
@@ -181,6 +183,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"delete",  TokenType::KW_DELETE},
         {"set",     TokenType::KW_SET},
         {"show",    TokenType::KW_SHOW},
+        {"switch",  TokenType::KW_SWITCH},
 
         {"where",   TokenType::KW_WHERE},
         {"run",      TokenType::KW_RUN},

@@ -12,6 +12,8 @@
 
 #include "cli/input.hpp"
 
+#include "server/server.hpp"    
+
 #include <iostream>
 #include <cstring>
 
@@ -31,10 +33,15 @@ int main()
     Database database;
     Executor executor(database);
     CLI cli(executor);
+    Server server(database, executor);
+    LockManager lock_manager(database.file->cache);
+    database.file->lock_manager = &lock_manager;
+
+    server.start();
 
 
 
-    cli.run();          // Starts the interactive CLI loop
+    //cli.run();          // Starts the interactive CLI loop
 
     database.flush();   // Save any pending data on exit
 

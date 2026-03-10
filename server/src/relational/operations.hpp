@@ -80,7 +80,7 @@ enum class ScanMode {
 
 class Scan : public Operator {
 public:
-    Scan(Database& database, const Table& table, const Predicate* pred = nullptr);
+    Scan(Database& database, const Table& table, const Predicate* pred = nullptr, Transaction* txn = nullptr);
 
     bool next(Output &output) override;
     bool next_from_posting_list(Output& output);
@@ -95,6 +95,7 @@ public:
 private:
     Database& database_;
     const Table& table_;
+    Transaction* txn;
 
     const Predicate* pred_;
     Key index_key_;
@@ -108,6 +109,8 @@ private:
     int posting_block_reads = 0;
     int current_slot = 0;
     off_t current_block_location = 0;
+
+    off_t tree_root_ = 0;
 
 
     bool is_inner_ = false;

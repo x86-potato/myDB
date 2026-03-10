@@ -646,6 +646,74 @@ ParserReturn Parser::parseDelete()
     return {0, std::move(query)};
 }
 
+ParserReturn Parser::parseSwitch()
+{
+    auto query = std::make_unique<AST::SwitchQuery>();
+    query->type = AST::QueryType::Switch;
+
+
+    //expect session id
+    if(iterator.getNext()->type != TokenType::LITERAL)
+    {
+        parserError("Expected session id");
+        return {1, nullptr};
+    }
+    query.get()->session_id = iterator.getCurr()->name;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+ParserReturn Parser::parseBegin()
+{
+    auto query = std::make_unique<AST::BeginQuery>();
+    query->type = AST::QueryType::Begin;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseCommit()
+{
+    auto query = std::make_unique<AST::CommitQuery>();
+    query->type = AST::QueryType::Commit;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseRollback()
+{
+    auto query = std::make_unique<AST::RollbackQuery>();
+    query->type = AST::QueryType::Rollback;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
 ParserReturn Parser::parse(std::vector<Token> &tokenList)
 {
     iterator.tokenList = &tokenList;
@@ -669,6 +737,14 @@ ParserReturn Parser::parse(std::vector<Token> &tokenList)
             return parseRun();
         case TokenType::KW_SHOW:
             return parseShow();
+        case TokenType::KW_SWITCH:
+            return parseSwitch();
+        case TokenType::KW_BEGIN:
+            return parseBegin();
+        case TokenType::KW_COMMIT:
+            return parseCommit();
+        case TokenType::KW_ROLLBACK:
+            return parseRollback();
         default:
             parserError("No such query exists");
             break;
