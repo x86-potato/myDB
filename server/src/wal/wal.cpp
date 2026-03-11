@@ -20,5 +20,8 @@ WAL::WAL()
 
 void WAL::build_wal()
 {
+    //wal is structred in 2 sections 
 
+    //1. map pages 
+    //2. page data
 }

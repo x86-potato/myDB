@@ -7,6 +7,19 @@
 #include <mutex>
 
 
+struct MapBlock
+{
+    struct WalEntry
+    {
+        off_t page_location;
+        off_t log_offset;
+    };
+
+    WalEntry entries[WAL_ENTRIES_PER_MAP_PAGE];      
+};
+
+
+
 class WAL
 {
 private:
