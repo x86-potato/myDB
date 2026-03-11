@@ -105,13 +105,13 @@ public:
 
 
     LocationData<LeafNodeType> locate_exact(
-        std::string key, off_t root_location, int txn);
+        std::string key, off_t root_location, Transaction& txn);
     LocationData<LeafNodeType> locate_gte(
-        std::string key, off_t root_location, int txn);
+        std::string key, off_t root_location, Transaction& txn);
     LocationData<LeafNodeType> locate_gt(
-        std::string key, off_t root_location, int txn);
+        std::string key, off_t root_location, Transaction& txn);
 
-    LocationData<LeafNodeType> locate_start(off_t root_location, int txn);
+    LocationData<LeafNodeType> locate_start(off_t root_location, Transaction& txn);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string, off_t root_location);
@@ -154,7 +154,7 @@ private:
     void push_into_internal(InternalNodeT* target, char* value, int txn_id);
 
     //----------utill functions----------------
-    LeafNodeT* traverse_to_leaf(char* to_search, off_t start_location, int txn_id);
+    LeafNodeT* traverse_to_leaf(char* to_search, off_t start_location, Transaction &txn);
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int get_first_key_index_gte(char* to_locate, LeafNodeT* node);

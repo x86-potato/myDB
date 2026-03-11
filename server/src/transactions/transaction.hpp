@@ -59,6 +59,10 @@ public:
     //private cache only write
     void write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset);
 
+    void acquire_shared(off_t page_location);
+
+    void release_shared(off_t page_location);
+
 
     //btree stuff
     void try_temp_lock(off_t page_location);

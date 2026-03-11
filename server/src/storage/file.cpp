@@ -59,9 +59,6 @@ off_t File::insert_primary_index(
     Transaction& txn = database->transactions.at(txn_id);
     std::cout << "Transaction " << txn_id << " attempting to insert key: " << key << " into primary index\n";
 
-    //lock the root node pre check
-    
-    NodeT *loaded_node = load_node<NodeT>(table.columns[0].indexLocation, txn_id);
 
     //here we would lock it as parent lock 
     off_t root_location = table.columns[0].indexLocation;
@@ -98,6 +95,7 @@ off_t File::insert_primary_index(
 template <typename MyBtree>
 void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index, int txn_id)
 {
+    Transaction& txn = database->transactions.at(txn_id);
     using NodeT = typename MyBtree::NodeType;
     off_t root = table.columns[column_index].indexLocation;
     NodeT *loaded_node = load_node<NodeT>(root, txn_id);
@@ -107,9 +105,15 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
     LocationData<typename MyBtree::LeafNodeType> location = tree.locate_exact(key, root, txn_id);
 
+    
+
+
     // Key doesn't exist - insert new entry
     if(location.key_index == -1)
     {
+
+        //lock path to the new key
+        tree.has_key(key, txn, root);
         tree.insert(key, record_location, root, txn_id);
         
         //TODO fix

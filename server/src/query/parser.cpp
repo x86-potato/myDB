@@ -507,7 +507,7 @@ ParserReturn Parser::parseSelect()
     }
     query->tableNames.push_back(tableToken->name);
 
-    while (iterator.peeknext()->type == TokenType::COMMA) {
+    while (iterator.peeknext() && iterator.peeknext()->type == TokenType::COMMA) {
         iterator.getNext(); // consume the comma
         Token* tableToken = iterator.getNext();
         if (tableToken->type != TokenType::IDENTIFIER) {

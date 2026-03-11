@@ -29,7 +29,7 @@ public:
     void execute (const std::string &input, Session& session);
 
     void execute_create_table(AST::CreateTableQuery* query, Session& session);
-    void execute_insert(AST::InsertQuery* query, int txn_id);
+    void execute_insert(AST::InsertQuery* query, Session& session);
     void execute_delete(AST::DeleteQuery* query, Session& session);
     void execute_select(AST::SelectQuery* query, Session& session);
     void execute_update(AST::UpdateQuery* query, Session& session);

@@ -20,7 +20,11 @@ void Executor::execute (const std::string &input, Session& session)
     ParserNameSpace::ParserReturn output = parser.parse(tokenList);
     queryAST = std::move(output.queryPointer);
 
-    if (output.code != 0) return;
+    if (output.code != 0) 
+    {
+        session.send_error(std::string("Syntax error in query: ") + input);
+        return;
+    }
 
     if(session.is_admin() && true == false) {
         switch (queryAST->type) {
@@ -58,7 +62,7 @@ void Executor::execute (const std::string &input, Session& session)
             break;
         case AST::QueryType::Insert:
             execute_insert(
-                static_cast<AST::InsertQuery*>(queryAST.get()), session.current_transaction_id
+                static_cast<AST::InsertQuery*>(queryAST.get()), session
             );
             break;
         case AST::QueryType::Delete:
@@ -218,7 +222,6 @@ void Executor::execute_select(AST::SelectQuery* query, Session& session) {
     {
        return;
     }
-    //plan.debug_print_plan(plan);
 
 
     if(plan.paths.size() == 0)
@@ -234,6 +237,8 @@ void Executor::execute_select(AST::SelectQuery* query, Session& session) {
 
         plan_executor.Execute();
     }
+
+    session.send_ok();
 }
 
 void Executor::execute_load(AST::LoadQuery* query, Session& session) {
@@ -322,8 +327,9 @@ void Executor::execute_create_table(AST::CreateTableQuery* query, Session& sessi
     session.set_current_txn(-1);
 }
 
-void Executor::execute_insert(AST::InsertQuery* query, int txn_id) {
+void Executor::execute_insert(AST::InsertQuery* query, Session& session) {
     
+    int txn_id = session.current_transaction_id;
     if(txn_id == -1)
     {
         std::cout << "Error: No active transaction for insert operation." << std::endl;
@@ -351,7 +357,10 @@ void Executor::execute_insert(AST::InsertQuery* query, int txn_id) {
     {
         std::cout << "Error: Insert operation failed for table " << tableName << std::endl;
         std::cout << "Transaction has been rolled back." << std::endl;
+        return;
     }
+
+    session.send_ok();
 }
 
 void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
@@ -368,6 +377,7 @@ void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
 
     const std::string &tableName = query->tableName;
     database.erase(tableName, plan, txn);
+    session.send_ok();
 }
 
 void Executor::execute_run(AST::RunQuery* query, Session& session) {
@@ -421,6 +431,8 @@ void Executor::execute_begin(AST::BeginQuery* query, Session& session) {
 
     session.set_current_txn(txn_id);    
 
+    session.send_ok();
+
 }
 
 void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
@@ -442,4 +454,6 @@ void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
 
     std::cout << "Transaction " << txn_id << " committed successfully." << std::endl;
     session.set_current_txn(-1);
+
+    session.send_ok();
 }

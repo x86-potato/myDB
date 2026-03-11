@@ -213,7 +213,7 @@ off_t BtreePlus<NodeT, LeafNodeT, InternalNodeT>::get_next_leftmost_node_pointer
 }
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::
-locate_exact(std::string key, off_t root_location, int txn_id)
+locate_exact(std::string key, off_t root_location, Transaction& txn)
 {
     LocationData<LeafNodeT> output;
 
@@ -246,7 +246,7 @@ locate_exact(std::string key, off_t root_location, int txn_id)
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::
-locate_gt(std::string key, off_t root_location, int txn_id)
+locate_gt(std::string key, off_t root_location, Transaction& txn)
 {
     LocationData<LeafNodeT> output;
 
@@ -292,24 +292,28 @@ locate_gt(std::string key, off_t root_location, int txn_id)
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::
-locate_gte(std::string key, off_t root_location, int txn_id)
+locate_gte(std::string key, off_t root_location, Transaction& txn)
 {
     LocationData<LeafNodeT> output;
 
     char buffer[KeyLen] = {0};
     std::memcpy(buffer, key.c_str(), key.length());
 
-    NodeT* cursor = file->load_node<NodeT>(root_location, txn_id);
+    txn.acquire_shared(root_location);
+    NodeT* cursor = file->load_node<NodeT>(root_location, txn.txn_id);
 
 
     if (cursor->current_key_count == 0)
     {
         output.key_index = -1;
         output.leaf = nullptr;
+
+        txn.release_shared(root_location);
         return output;
     }
 
-    LeafNodeT* leaf = traverse_to_leaf(buffer, root_location, txn_id);
+    //assume leaf has a lock still
+    LeafNodeT* leaf = traverse_to_leaf(buffer, root_location, txn);
 
     output.key_index = get_first_key_index_gte(buffer, static_cast<LeafNodeT*>(leaf));
 
@@ -335,23 +339,30 @@ locate_gte(std::string key, off_t root_location, int txn_id)
 
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
-LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>::locate_start(off_t root_location, int txn_id)
+LocationData<LeafNodeT> BtreePlus<NodeT, LeafNodeT, InternalNodeT>
+::locate_start(off_t root_location, Transaction &txn)
 {
     LocationData<LeafNodeT> output;
 
-    NodeT* cursor = file->load_node<NodeT>(root_location, txn_id);
+    txn.acquire_shared(root_location);
+    NodeT* cursor = file->load_node<NodeT>(root_location, txn.txn_id);
+    
 
     if(cursor->current_key_count == 0)
     {
         output.key_index = -1;
         output.leaf = nullptr;
+        txn.release_shared(root_location);
+
         return output;
     }
 
     while(!cursor->is_leaf)
     {
         InternalNodeT *cursor_cast = static_cast<InternalNodeT*>(cursor);
-        cursor = file->load_node<NodeT>(cursor_cast->children[0], txn_id);
+        txn.acquire_shared(cursor_cast->children[0]);
+        txn.release_shared(cursor->disk_location);
+        cursor = file->load_node<NodeT>(cursor_cast->children[0], txn.txn_id);
     }
 
     output.key_index = 0;
@@ -470,7 +481,13 @@ bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>
     return found;
 }
 
+// template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
+// bool BtreePlus<NodeT, LeafNodeT, InternalNodeT>
+// ::has_secondary_key(const std::string &key, Transaction& txn, off_t root_location)
+// {
+//     //secondary keys are special as we only wish to lock nodes in a tree when the key is not yet present
 
+// }
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::print_tree()
@@ -1102,14 +1119,21 @@ void BtreePlus<NodeT, LeafNodeT, InternalNodeT>::borrow_right_leaf(NodeT* curren
 
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 LeafNodeT* BtreePlus<NodeT, LeafNodeT, InternalNodeT>
-::traverse_to_leaf(char* to_search, off_t start_location, int txn_id)
+::traverse_to_leaf(char* to_search, off_t start_location, Transaction& txn)
 {
-    NodeT* cursor = file->load_node<NodeT>(start_location, txn_id);
+    //start is already locked
+    NodeT* cursor = file->load_node<NodeT>(start_location, txn.txn_id);
 
     while(!cursor->is_leaf)
     {
         InternalNodeT *cursor_cast = static_cast<InternalNodeT*>(cursor);
-        cursor = file->load_node<NodeT>(get_next_node_pointer(to_search, cursor_cast), txn_id);
+
+        off_t next_location = get_next_node_pointer(to_search, cursor_cast);
+
+        txn.release_shared(cursor->disk_location);
+        txn.acquire_shared(next_location);
+
+        cursor = file->load_node<NodeT>(next_location, txn.txn_id);
     }
     assert(cursor->is_leaf);
     return static_cast<LeafNodeT*>(cursor);

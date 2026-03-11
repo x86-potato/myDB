@@ -88,6 +88,18 @@ void Transaction::write_to_page(Page* page, size_t offset, const void* src, size
 
 }
 
+void Transaction::acquire_shared(off_t page_location)
+{
+    lock_manager.acquire_shared(txn_id, page_location);
+    // No need to track shared locks in the transaction's local state for this implementation
+}
+void Transaction::release_shared(off_t page_location)
+{
+    lock_manager.release_shared(txn_id, page_location);
+    
+}
+
+
 int Transaction::commit() {
     for (off_t block_offset : locks_held) {
         auto it = pages.find(block_offset);

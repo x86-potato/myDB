@@ -1,6 +1,9 @@
 //session defs
 #pragma once
 #include "../config.h"
+#include "../core/table.hpp"
+#include "../relational/operations.hpp"
+#include "response.hpp"
 #include <thread>
 #include <unistd.h>
 
@@ -39,6 +42,12 @@ struct Session {
     void set_current_txn(int txn_id) {
         current_transaction_id = txn_id;
     }
+
+    void send_ok();
+    void send_error(const std::string& error_message);
+    void send_metadata(std::vector<const Table*> tables);
+    void send_row(std::vector<OutputTuple>& tuples, bool last_packet);
+    void send_affected(int count);
 
     void close_session(Server &server);
 };

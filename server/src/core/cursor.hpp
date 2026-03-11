@@ -16,6 +16,8 @@ public:
     Table* table = nullptr;
     Transaction* txn = nullptr;
 
+    
+
     virtual bool next() = 0;
     virtual ~TreeCursor() = default;
 

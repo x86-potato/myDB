@@ -4,6 +4,9 @@
 
 
 
+//wal stuff
+const std::string WAL_LOG_FILE_NAME = "wal.log";
+const int WAL_PAGE_LIMIT = 100;
 
 
 constexpr int CACHE_PAGE_LIMIT = 300000;
