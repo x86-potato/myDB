@@ -6,9 +6,9 @@
 
 //wal stuff
 const std::string WAL_LOG_FILE_NAME = "wal.log";
-constexpr int WAL_ENTRIES_PER_MAP_PAGE = 4096/16;
+constexpr int WAL_ENTRIES_PER_MAP_PAGE = 4096/8;
 constexpr int WAL_MAP_PAGE_LIMIT = 10;
-constexpr size_t WAL_FILE_SIZE = (WAL_MAP_PAGE_LIMIT * 4096) + (WAL_ENTRIES_PER_MAP_PAGE * 4096 * WAL_MAP_PAGE_LIMIT); // in bytes
+constexpr size_t WAL_FILE_SIZE = 4096 + (WAL_MAP_PAGE_LIMIT * 4096) + (WAL_ENTRIES_PER_MAP_PAGE * 4096 * WAL_MAP_PAGE_LIMIT); // in bytes
 
 
 
