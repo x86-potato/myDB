@@ -11,6 +11,18 @@ Cache::Cache(){
     std::cout << "\nprealloc done\n:";
 }
 
+void Cache::clear()
+{
+    for (int i = 0; i < CACHE_PAGE_LIMIT; i++)
+    {
+        cache_index_in_use[i] = false;
+    }
+    page_table.clear();
+    lru.page_to_node.clear();
+    lru.allocated_count = 0;
+    lru.head = nullptr;
+    lru.tail = nullptr;
+}
 
 int Cache::write_block(off_t block_off)
 {

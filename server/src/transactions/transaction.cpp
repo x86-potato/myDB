@@ -1,4 +1,5 @@
 #include "transaction.hpp"
+#include "../wal/wal.hpp"
 
 void Transaction::begin() {
     //std::cout << "Transaction " << txn_id << " started.\n";
@@ -11,7 +12,7 @@ int Transaction::copy_page(off_t page_location) {
         std::cout << "Page " << page_location << " is already in the transaction's local buffer.\n";
         return 0; // Page is already in the transaction's local buffer
     }
-    Page* page = cache.read_block(page_location);  
+    Page* page = cache.read_block(page_location);
 
 
 
@@ -24,17 +25,17 @@ int Transaction::copy_page(off_t page_location) {
 
 
 //@ check is exlusive locked
-bool Transaction::is_page_locked_exclusive(off_t page_location) {
+bool Transaction::is_page_owned(off_t page_location) {
 
     return locks_held.find(page_location) != locks_held.end();
 }
 
 
 //@ copy page without acquiring lock, used for read only pages
-bool Transaction::acquire_exclusive_and_copy_if_needed(off_t page_location) {
-    if(!is_page_locked_exclusive(page_location)) {
+bool Transaction::acquire_ownership_and_copy_if_needed(off_t page_location) {
+    if(!is_page_owned(page_location)) {
         if(copy_page(page_location) == 0) {
-            lock_manager.acquire_exclusive(txn_id, page_location);  
+            lock_manager.acquire_ownership(txn_id, page_location);
             locks_held.insert(page_location);
             return true; // Lock was successfully acquired
         }
@@ -44,7 +45,7 @@ bool Transaction::acquire_exclusive_and_copy_if_needed(off_t page_location) {
 }
 
 int Transaction::copy_page_no_lock(off_t page_location) {
-    Page* page = cache.read_block(page_location);  
+    Page* page = cache.read_block(page_location);
 
     cache.cache_lock.lock(); // Lock the cache to ensure thread safety while accessing the page
     NodeLRU* node = cache.lru.page_to_node[page_location];
@@ -69,7 +70,7 @@ Page* Transaction::private_cache_read(off_t page_location) {
     return nullptr; // Return nullptr if the page is not found
 }
 
-const Page* Transaction::read_page(off_t page_location) {
+Page* Transaction::read_page(off_t page_location) {
     auto it = pages.find(page_location);
     if (it != pages.end()) {
         return &it->second; // Return pointer to the page in the transaction's local buffer
@@ -79,7 +80,7 @@ const Page* Transaction::read_page(off_t page_location) {
 
 void Transaction::write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset) {
     assert(offset + len <= BLOCK_SIZE);
-    
+
     assert(pages.find(block_offset) != pages.end()); // Ensure the page is in the transaction's local buffer
 
     assert(locks_held.find(block_offset) != locks_held.end()); // Ensure the transaction holds a lock on the page
@@ -88,41 +89,71 @@ void Transaction::write_to_page(Page* page, size_t offset, const void* src, size
 
 }
 
+void Transaction::try_acquire_shared(off_t page_location)
+{
+    if (shared_locks_held.count(page_location)) {
+        return; // Already holds a lock on this page
+    }
+
+    lock_manager.acquire_shared(txn_id, page_location);
+    shared_locks_held.insert(page_location);
+}
+
+void Transaction::try_release_shared(off_t page_location)
+{
+    if (!shared_locks_held.count(page_location))
+    {
+        return;
+    }
+
+    lock_manager.release_shared(txn_id, page_location);
+    shared_locks_held.erase(page_location);
+
+}
+
 void Transaction::acquire_shared(off_t page_location)
 {
-    lock_manager.acquire_shared(txn_id, page_location);
+    //lock_manager.acquire_shared(txn_id, page_location);
     // No need to track shared locks in the transaction's local state for this implementation
 }
 void Transaction::release_shared(off_t page_location)
 {
-    lock_manager.release_shared(txn_id, page_location);
-    
+    //lock_manager.release_shared(txn_id, page_location);
+
 }
 
 
 int Transaction::commit() {
+
     for (off_t block_offset : locks_held) {
         auto it = pages.find(block_offset);
         if (it != pages.end()) {
+
+            //first we acquire a exclusive lock so all readers finish
+            lock_manager.acquire_exclusive(txn_id, block_offset);
+
             Page* page = cache.read_block(block_offset); // Read the current page from the cache
             std::cout << "Committing page at offset " << block_offset << " for transaction " << txn_id << ".\n";
             cache.write_to_page(page, 0, &it->second, BLOCK_SIZE, block_offset); // Write the modified page back to the cache
+
+            lock_manager.release_exclusive(txn_id, block_offset); // Release the exclusive lock after writing
+
         }
         else
         {
             std::cout << "Error: Transaction " << txn_id << " does not have page at offset " << block_offset << " in its local buffer.\n";
         }
     }
-   for (off_t block_offset : locks_held) {
-        cache.cache_lock.lock(); // Lock the cache to ensure thread safety while accessing the page
-        NodeLRU* node = cache.lru.page_to_node[block_offset];
-        cache.cache_lock.unlock(); // Unlock the cache after accessing the page
 
-        node->rw_latch.unlock(); // Unlock the page after writing
+    // Release all locks held by the transaction
+    for (off_t block_offset : locks_held) {
+        lock_manager.release_ownership(txn_id, block_offset);
     }
+    locks_held.clear();
 
     std::cout << "Transaction " << txn_id << " committed.\n";
 
+    wal.log_insert(pages);
 
     return 0; // Return 0 on success, or an error code if needed
 }
@@ -134,13 +165,13 @@ void Transaction::try_temp_lock(off_t page_location)
         return;
     }
 
-    lock_manager.acquire_exclusive(txn_id, page_location);
+    lock_manager.acquire_ownership(txn_id, page_location);
     temp_locks.insert(page_location);
 }
 void Transaction::try_release_temp_lock(off_t page_location)
 {
     if (temp_locks.count(page_location)) {
-        lock_manager.release_exclusive(txn_id, page_location);
+        lock_manager.release_ownership(txn_id, page_location);
         temp_locks.erase(page_location);
     }
 }

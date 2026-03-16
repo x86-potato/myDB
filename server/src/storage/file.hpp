@@ -23,7 +23,7 @@
 
 #define HEADER_TABLE_LOCATION 0
 #define HEADER_ROOT_DATA_LOCATION 8
-#define DATA_NODE_METADATA_SIZE 24
+#define DATA_NODE_METADATA_SIZE 32
 
 // Forward declarations to avoid circular dependencies
 
@@ -41,25 +41,33 @@ enum status {
     READY
 };
 
+struct Header_Block
+{
+    off_t location;
+    off_t table_linked_list_head;
+};
+
 struct Data_Node {
+    off_t location = 0; // used for wal
     off_t fill_ptr = 0;
     off_t next_free_block = 0;
     off_t overflow = false;
 
-    std::byte padding[4072] = {std::byte(0)};
+    std::byte padding[4064] = {std::byte(0)};
 };
 
 struct Table_Block
 {
+    off_t location = 0; // used for wal
     off_t next_table_block = -1;
-    std::byte padding[4088] = {std::byte(0)};
 };
 
 struct Posting_Block
 {
+    off_t location = 0; // used for wal
     off_t next = 0;
     off_t prev = 0;
-    off_t entries[509] = {0}; // 509 entries of 8 bytes each = 4072 bytes
+    off_t entries[508] = {0}; // 508 entries of 8 bytes each = 4064 bytes
     uint32_t size = 0;
     int32_t free_index = -1;
 };
@@ -67,6 +75,7 @@ struct Posting_Block
 
 struct Freed_Block
 {
+    off_t location = 0; // used for wal
     off_t next_free_block;
     BlockType original_type;
 };
@@ -83,7 +92,7 @@ public:
 
     off_t header_pointer;
     off_t free_linked_list_head = 0;
-    off_t table_linked_list_head = 0;
+    off_t table_linked_list_head = -1;
 
     int index_block_count = 0;
     int data_blocks_count = 0;
@@ -93,7 +102,7 @@ public:
     Database *database;
     LockManager *lock_manager;
 
-    std::mutex allocation_mutex; // Mutex for synchronizing block allocation 
+    std::mutex allocation_mutex; // Mutex for synchronizing block allocation
 
 
     File();
@@ -102,6 +111,8 @@ public:
     File(File&&) = delete;
     File& operator=(File&&) = delete;
 
+
+    void write_page_to_file(const void* data, off_t offset);
 
     template <typename MyBtree>
     off_t insert_primary_index(
@@ -119,14 +130,16 @@ public:
                                     MyBtree32* index32,
                                     MyBtree16* index16,
                                     MyBtree8*  index8,
-                                    MyBtree4*  index4);
+                                    MyBtree4*  index4,
+                                    Transaction& txn);
 
     template<typename MyBtree32, typename MyBtree16, typename MyBtree8, typename MyBtree4>
     void generate_index(int columnIndex, Table& table,
                           MyBtree32* index32,
                           MyBtree16* index16,
                           MyBtree8*  index8,
-                          MyBtree4*  index4);
+                          MyBtree4*  index4,
+                          Transaction& txn);
 
     template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>
     std::vector<Record> find(std::string key, MyBtree &index_tree, off_t root_location, Table &table);
@@ -135,7 +148,7 @@ public:
     off_t alloc_block();
 
     template<typename NodeT>
-    void update_node(NodeT *node, off_t node_location, size_t size, int txn_id);
+    void update_node(NodeT *node, off_t node_location, size_t size, Transaction &txn);
 
     template<typename LeafNodeT>
     void update_leafnode(LeafNodeT *node, off_t node_location);
@@ -145,7 +158,7 @@ public:
     void update_root_pointer(off_t old_location, off_t new_location);
 
     template<typename NodeT>
-    NodeT* load_node(off_t disk_offset, int txn_id);
+    NodeT* load_node(off_t disk_offset, Transaction& txn);
 
 
     template<typename BtreeT>
@@ -169,7 +182,7 @@ private:
     void init_table_block(off_t location);
 
     template<typename NodeT>
-    void init_node(off_t location, int txn_id);
+    void init_node(off_t location, Transaction& txn);
 
     void init_data_node(off_t location, int txn_id);
 

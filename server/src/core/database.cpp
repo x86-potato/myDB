@@ -2,6 +2,8 @@
 
 Database::Database ()
 {
+
+
     file = new File();
     file->database = this;
 
@@ -18,6 +20,9 @@ Database::Database ()
         table.table_print();
     }
 
+    wal = new WAL(file);
+
+    wal->recover(*this);
 
 }
 
@@ -192,7 +197,7 @@ int Database::create_transaction()
     //this line caused issue due to refrence member move assignemnt being deleted
     //transactions.insert({txn_id, Transaction(txn_id, file->cache, *file->lock_manager)});
 
-    transactions.try_emplace(txn_id, txn_id, file->cache, *file->lock_manager);
+    transactions.try_emplace(txn_id, txn_id, file->cache, *file->lock_manager, *wal);
 
 
 
@@ -218,5 +223,3 @@ int Database::commit_transaction(int txn_id)
 
     return 0;
 }
-
-

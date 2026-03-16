@@ -129,7 +129,7 @@ void Executor::execute (const std::string &input, Session& session)
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    std::cout << "\nExecution time: " << elapsed.count() << " for Session: "<< session.session_id  <<"\n";
+    std::cout << "\nExecution time: " << elapsed.count() << " us for Session: "<< session.session_id  <<"\n";
 }
 
 void Executor::execute_show(AST::ShowQuery* query) {
@@ -187,7 +187,8 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
         &database.index_tree32,
         &database.index_tree16,
         &database.index_tree8,
-        &database.index_tree4
+        &database.index_tree4,
+        database.transactions.at(0) 
     );
 }
 

@@ -12,7 +12,7 @@
 
 #include "cli/input.hpp"
 
-#include "server/server.hpp"    
+#include "server/server.hpp"
 
 #include <iostream>
 #include <cstring>

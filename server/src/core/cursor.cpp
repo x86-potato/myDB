@@ -56,7 +56,7 @@ bool BPlusTreeCursor<TreeType>::next() {
             txn->acquire_shared(location.leaf->next_leaf);
             location.leaf = static_cast<typename TreeType::LeafNodeType*>(
                 tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf, txn->txn_id
+                location.leaf->next_leaf, *txn
                 )
             );
 
@@ -88,7 +88,7 @@ void BPlusTreeCursor<TreeType>::skip_read_leaves()
     {
         location.leaf = static_cast<typename TreeType::LeafNodeType*>(
             tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf, txn->txn_id
+                location.leaf->next_leaf, *txn
             )
         );
         location.key_index = 0;
@@ -123,7 +123,7 @@ bool BPlusTreeCursor<TreeType>::set_start(off_t start_root_location)
 
 
     //shared lock remains on the leaf we found, assume if key index -1 then no lock is set
-    location = tree->locate_start(tree_root, txn);
+    location = tree->locate_start(tree_root, *txn);
     if (location.key_index == -1 || location.leaf == nullptr)
     {
         return false;
@@ -144,7 +144,7 @@ bool BPlusTreeCursor<TreeType>::set_gte(const Key& key, off_t start_root_locatio
 
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, txn->txn_id);
+    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, *txn);
     if (location.key_index == -1)
     {
         return false;
@@ -162,7 +162,7 @@ bool BPlusTreeCursor<TreeType>::set_gt(const Key &key, off_t start_root_location
 
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, txn->txn_id);
+    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), tree_root, *txn);
 
     if(location.key_index == -1)
     {

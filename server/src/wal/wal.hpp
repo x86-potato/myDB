@@ -1,22 +1,20 @@
 #pragma once
-#include "../config.h"
-#include "../storage/record.hpp"
-#include "../core/database.hpp"
 #include "../core/cache.hpp"
+#include "../storage/file.hpp"
+#include <fcntl.h>
+#include <unistd.h>
+
+class Database;
+class File;
 
 #include <mutex>
 
 //first 4KB block is the header, which contains metadata about the WAL
 struct WALHeaderBlock
 {
-    off_t current_LSN; //the offset in the WAL file where the next log entry will be written
-    off_t last_checkpoint_LSN; //the offset in the WAL file where the last checkpoint was made
+    off_t last_checkpoint_LSN = -1; //the offset in the WAL file where the last checkpoint was made
 };
 
-struct MapBlock
-{
-    off_t page_location[WAL_ENTRIES_PER_MAP_PAGE]; //the offset in the database file where the page is located
-};
 
 
 
@@ -25,12 +23,15 @@ class WAL
 {
 private:
     int wal_file_fd = -1;
+    std::mutex wal_mutex; //prevent multiple threads from writing to the WAL at the same time
+    File *file;
 
 public:
     size_t current_entry_index = 0;
-    WAL() = default;
+    WAL(File *file);
 
-    void log_insert(Page& page, off_t page_location);
+    void log_insert(std::unordered_map<off_t, Page> &pages);
+    void debug(off_t to_find);
 
     void recover(Database& database);
 

@@ -35,6 +35,8 @@ struct NodeLRU
     std::atomic<int> pin_count = 0;
     std::shared_mutex rw_latch; // Mutex for synchronizing access to the page
 
+    std::mutex owner_mutex; 
+
 
 };
 
@@ -76,6 +78,8 @@ public:
     Cache& operator=(const Cache&) = delete;
     Cache(Cache&&) = delete;
     Cache& operator=(Cache&&) = delete;
+
+    void clear();
 
     Page* read_block(off_t block_off);
     void pin_page(off_t block_off);

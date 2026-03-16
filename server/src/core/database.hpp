@@ -7,6 +7,7 @@
 #include "../query/validator.hpp"
 #include "../query/plan/builder.hpp"
 #include "../transactions/transaction.hpp"
+#include "../wal/wal.hpp"
 #include <arpa/inet.h>
 #include <mutex>
 #include <variant>
@@ -19,6 +20,7 @@ class Database
 
 public:
     File *file;
+    WAL *wal;
 
     //@maps table name to table object
     std::unordered_map<std::string,Table> tableMap;

@@ -49,6 +49,13 @@ File::File()
     }
 }
 
+void File::write_page_to_file(const void* data, off_t offset)
+{
+    if (pwrite(file_fd, data, BLOCK_SIZE, offset) == -1) {
+        perror("pwrite failed");
+        exit(1);
+    }
+}
 
 template <typename MyBtree>
 off_t File::insert_primary_index(
@@ -60,7 +67,7 @@ off_t File::insert_primary_index(
     std::cout << "Transaction " << txn_id << " attempting to insert key: " << key << " into primary index\n";
 
 
-    //here we would lock it as parent lock 
+    //here we would lock it as parent lock
     off_t root_location = table.columns[0].indexLocation;
 
 
@@ -76,7 +83,7 @@ off_t File::insert_primary_index(
     {
         return -1;
     }
-    tree.insert(key, record_location,root_location, txn_id);
+    tree.insert(key, record_location,root_location, txn);
 
     std::cout << database->transactions.at(txn_id).txn_id << " inserted record at location " << record_location << " with key " << key << "\n";
 
@@ -93,19 +100,20 @@ off_t File::insert_primary_index(
 
 
 template <typename MyBtree>
-void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index, int txn_id)
+void File::insert_secondary_index(
+    std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index, int txn_id)
 {
     Transaction& txn = database->transactions.at(txn_id);
     using NodeT = typename MyBtree::NodeType;
     off_t root = table.columns[column_index].indexLocation;
-    NodeT *loaded_node = load_node<NodeT>(root, txn_id);
+    //NodeT *loaded_node = load_node<NodeT>(root, txn);
     //cache->pin_page(root);
     //tree.root_node = loaded_node;
     //tree.tree_root = root;
 
-    LocationData<typename MyBtree::LeafNodeType> location = tree.locate_exact(key, root, txn_id);
+    LocationData<typename MyBtree::LeafNodeType> location = tree.locate_exact(key, root, txn);
 
-    
+
 
 
     // Key doesn't exist - insert new entry
@@ -114,8 +122,8 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
         //lock path to the new key
         tree.has_key(key, txn, root);
-        tree.insert(key, record_location, root, txn_id);
-        
+        tree.insert(key, record_location, root, txn);
+
         //TODO fix
         //update_node<typename MyBtree::NodeType>(tree.root_node, tree.tree_root, sizeof(typename MyBtree::InternalNodeType));
 
@@ -144,7 +152,7 @@ void File::insert_secondary_index(std::string key, Table &table, MyBtree &tree, 
 
         location.leaf->values[location.key_index] = block_location;
         update_posting_block(block_location, block);
-        update_node(location.leaf, location.leaf->disk_location, 4096, 0);
+        update_node(location.leaf, location.leaf->disk_location, 4096, txn);
         return;
     }
 
@@ -204,13 +212,14 @@ void File::build_secondary_index(Table& table, int columnIndex,
                                     MyBtree32* index32,
                                     MyBtree16* index16,
                                     MyBtree8*  index8,
-                                    MyBtree4*  index4)
+                                    MyBtree4*  index4,
+                                    Transaction& txn)
 {
     using LeafNodeType = typename PrimaryBtree::LeafNodeType;
 
     off_t tree_root = table.columns[0].indexLocation;
 
-    LeafNodeType* leaf = primaryTree->find_leftmost_leaf(tree_root);
+    LeafNodeType* leaf = primaryTree->find_leftmost_leaf(tree_root, txn);
 
     while (leaf != nullptr) {
         for (int i = 0; i < leaf->current_key_count; i++) {
@@ -254,7 +263,7 @@ void File::build_secondary_index(Table& table, int columnIndex,
 
 
         if (leaf->next_leaf != 0) {
-            leaf = static_cast<LeafNodeType*>(load_node<typename PrimaryBtree::NodeType>(leaf->next_leaf, 0));
+            leaf = static_cast<LeafNodeType*>(load_node<typename PrimaryBtree::NodeType>(leaf->next_leaf, txn));
         } else {
             leaf = nullptr;
         }
@@ -267,17 +276,18 @@ void File::generate_index(int columnIndex, Table& table,
                           MyBtree32* index32,
                           MyBtree16* index16,
                           MyBtree8*  index8,
-                          MyBtree4*  index4)
+                          MyBtree4*  index4,
+                          Transaction& txn)
 {
     table.columns[columnIndex].indexLocation = alloc_block();
     update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
 
     // Initialize secondary tree root
     switch (table.columns[columnIndex].type) {
-        case Type::INTEGER: init_node<typename MyBtree4::NodeType>(table.columns[columnIndex].indexLocation, 0); break;
-        case Type::CHAR32:  init_node<typename MyBtree32::NodeType>(table.columns[columnIndex].indexLocation, 0); break;
-        case Type::CHAR16:  init_node<typename MyBtree16::NodeType>(table.columns[columnIndex].indexLocation, 0); break;
-        case Type::CHAR8:   init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation, 0); break;
+        case Type::INTEGER: init_node<typename MyBtree4::NodeType>(table.columns[columnIndex].indexLocation, txn); break;
+        case Type::CHAR32:  init_node<typename MyBtree32::NodeType>(table.columns[columnIndex].indexLocation, txn); break;
+        case Type::CHAR16:  init_node<typename MyBtree16::NodeType>(table.columns[columnIndex].indexLocation, txn); break;
+        case Type::CHAR8:   init_node<typename MyBtree8::NodeType>(table.columns[columnIndex].indexLocation, txn); break;
         default: std::cerr << "Type not supported for indexing\n"; return;
     }
 
@@ -285,16 +295,16 @@ void File::generate_index(int columnIndex, Table& table,
     switch (table.columns[0].type) {
         case Type::INTEGER:
             build_secondary_index<MyBtree4>
-            (table, columnIndex, index4, index32, index16, index8, index4); break;
+            (table, columnIndex, index4, index32, index16, index8, index4,txn); break;
         case Type::CHAR32:
             build_secondary_index<MyBtree32>
-            (table, columnIndex, index32, index32, index16, index8, index4); break;
+            (table, columnIndex, index32, index32, index16, index8, index4,txn); break;
         case Type::CHAR16:
             build_secondary_index<MyBtree16>
-            (table, columnIndex, index16, index32, index16, index8, index4); break;
+            (table, columnIndex, index16, index32, index16, index8, index4,txn); break;
         case Type::CHAR8:
             build_secondary_index<MyBtree8>
-            (table, columnIndex, index8, index32, index16, index8, index4); break;
+            (table, columnIndex, index8, index32, index16, index8, index4,txn); break;
         default:
             std::cerr << "Type not supported for indexing\n";
             return;
@@ -333,7 +343,7 @@ off_t File::alloc_block()
         //extract next free block from head of free list
 
         free_linked_list_head = *reinterpret_cast<off_t*>(page->buffer);
-        
+
         return allocated_block;
     }
 
@@ -354,11 +364,11 @@ off_t File::alloc_block()
 }
 
 template<typename NodeT>
-void File::update_node(NodeT *node, off_t node_location, size_t size, int txn_id)
+void File::update_node(NodeT *node, off_t node_location, size_t size, Transaction& txn)
 {
-    Page* page = database->transactions.at(txn_id).private_cache_read(node_location);
+    Page* page = txn.private_cache_read(node_location);
 
-    database->transactions.at(txn_id).write_to_page(page,0,node, size, node_location);
+    txn.write_to_page(page,0,node, size, node_location);
 }
 template<typename LeafNodeT>
 void File::update_leafnode(LeafNodeT *node, off_t node_location)
@@ -465,15 +475,12 @@ void File::delete_from_posting_list(off_t posting_block_location, off_t record_l
 
 
 template<typename NodeT>
-NodeT* File::load_node(off_t disk_offset, int txn_id) {
-    if(database->transactions.find(txn_id) != database->transactions.end())
-    {
-        Page* page = database->transactions.at(txn_id).private_cache_read(disk_offset);
+NodeT* File::load_node(off_t disk_offset, Transaction &txn) {
+    Page* private_page = txn.private_cache_read(disk_offset);
 
-        if(page != nullptr)
-            return reinterpret_cast<NodeT*>(page->buffer);
+    if(private_page != nullptr)
+        return reinterpret_cast<NodeT*>(private_page->buffer);
 
-    }
 
     Page* page = cache.read_block(disk_offset);
 
@@ -614,12 +621,12 @@ off_t File::insert_table(Table &table, int txn_id)
 
     off_t new_table_location = alloc_block();
     txn.allocated_blocks.push_back(new_table_location);
-    
-    txn.acquire_exclusive_and_copy_if_needed(new_table_location);
-    
+
+    txn.acquire_ownership_and_copy_if_needed(new_table_location);
+
     Page* new_table_page = txn.private_cache_read(new_table_location);
 
-    txn.acquire_exclusive_and_copy_if_needed(header_pointer);
+    txn.acquire_ownership_and_copy_if_needed(header_pointer);
 
     Page* header_page = txn.private_cache_read(header_pointer);
 
@@ -627,24 +634,27 @@ off_t File::insert_table(Table &table, int txn_id)
     {
         table_linked_list_head = new_table_location;
         //also update header so the on-disk head pointer stays current
-        txn.copy_page(header_pointer);
-        txn.write_to_page(txn.private_cache_read(header_pointer), 0, 
+        txn.write_to_page(txn.private_cache_read(header_pointer), 8,
             &table_linked_list_head, sizeof(off_t), header_pointer);
 
         off_t negative_one = -1;
-        txn.write_to_page(new_table_page, 0, &negative_one, 8, new_table_location);
+        txn.write_to_page(new_table_page, 0, &new_table_location, sizeof(off_t), new_table_location);
+        txn.write_to_page(new_table_page, 8, &negative_one, 8, new_table_location);
     }
     else
     {
         //if not the first table, set new table as head of linked list and point it to old head
         off_t old_head = table_linked_list_head;
-        txn.write_to_page(new_table_page, 0, &old_head, sizeof(off_t), new_table_location);
+
+        txn.write_to_page(new_table_page, 0, &new_table_location, sizeof(off_t), new_table_location);
+        txn.write_to_page(new_table_page, 8, &old_head, sizeof(off_t), new_table_location);
         table_linked_list_head = new_table_location;
-        
-        txn.write_to_page(header_page, 0, &table_linked_list_head, sizeof(off_t), header_pointer);
-        
+
+        txn.write_to_page(header_page, 8, &table_linked_list_head, sizeof(off_t), header_pointer);
+
     }
     Table_Block table_block;
+    table_block.location = new_table_location;
     table_block.next_table_block = -1;
 
 
@@ -652,7 +662,7 @@ off_t File::insert_table(Table &table, int txn_id)
     // initialize primary index root for the new table
     off_t location = alloc_block();
 
-    txn.acquire_exclusive_and_copy_if_needed(location);
+    txn.acquire_ownership_and_copy_if_needed(location);
     txn.allocated_blocks.push_back(location);
     //txn.write_to_page(txn.private_cache_read(location), 0, &table_block, sizeof(Table_Block), location);
 
@@ -661,16 +671,16 @@ off_t File::insert_table(Table &table, int txn_id)
     switch (table.columns[0].type)
     {
         case Type::INTEGER:
-            init_node<Node4>(location, txn_id);
+            init_node<Node4>(location, txn);
             break;
         case Type::CHAR32:
-            init_node<Node32>(location, txn_id);
+            init_node<Node32>(location, txn);
             break;
         case Type::CHAR16:
-            init_node<Node16>(location, txn_id);
+            init_node<Node16>(location, txn);
             break;
         case Type::CHAR8:
-            init_node<Node8>(location, txn_id);
+            init_node<Node8>(location, txn);
             break;
         default:
             std::cerr << "Unsupported type\n";
@@ -680,7 +690,8 @@ off_t File::insert_table(Table &table, int txn_id)
     // write serialized table data right after the next-pointer
 
     std::vector<std::byte> casted_table = cast_to_bytes(&table);
-    txn.write_to_page(new_table_page, sizeof(off_t), casted_table.data(), casted_table.size(), new_table_location);
+
+    txn.write_to_page(new_table_page, 16, casted_table.data(), casted_table.size(), new_table_location);
 
     return 0;
 }
@@ -698,10 +709,10 @@ std::vector<Table> File::load_tables()
 
         // follow pointer stored in first 8 bytes
         off_t next = -1;
-        std::memcpy(&next, page->buffer, sizeof(off_t));
+        std::memcpy(&next, page->buffer+8, sizeof(off_t));
 
         // locate start of serialized table data immediately after the pointer
-        int offset = sizeof(off_t);
+        int offset = 16;
 
         // compute length of the table serialization including end marker
         int tableLen = 0;
@@ -730,11 +741,10 @@ void File::header_block_creation()
 
     Page* header_page = cache.read_block(header_pointer);
 
-    std::byte temp_header[16];
+    Header_Block header_block;
+    header_block.location = header_pointer;
+    header_block.table_linked_list_head = -1;
 
-    //set table block pointer
-    table_linked_list_head = -1;
-    memcpy(&temp_header[0],&table_linked_list_head,8);
 
 
     //set root data node pointer
@@ -744,30 +754,31 @@ void File::header_block_creation()
 
     //init_data_node(free_data_pointer, 0);
 
-    cache.write_to_page(header_page,0,temp_header,8, 0);
+    cache.write_to_page(header_page,0,&header_block,16, 0);
 
 
     cache.flush_cache();
 }
 //void File::init_table_block();
 template<typename NodeT>
-void File::init_node(off_t location, int txn_id)
+void File::init_node(off_t location, Transaction& txn)
 {
     NodeT node;
     node.disk_location = location;
     node.is_leaf = true;
 
-    File::update_node(&node, location, sizeof(NodeT), txn_id);
+
+    File::update_node(&node, location, sizeof(NodeT), txn);
 
 }
 void File::init_data_node(off_t location, int txn_id)
 {
     Data_Node data;
-
+    data.location = location;
     data.overflow = false;
     data.next_free_block = 0;
 
-  //  Page* page = database->transactions.at(txn_id).private_cache_read(location); 
+  //  Page* page = database->transactions.at(txn_id).private_cache_read(location);
 
  //   memcpy(page->buffer, &data,sizeof(data));
 
@@ -778,14 +789,18 @@ void File::init_data_node(off_t location, int txn_id)
 void File::init_table_block(off_t location)
 {
     Page* page = cache.read_block(location);
-    //first 4 bytes int
-    //next 8 byts overflow
+    //first
+    Table_Block block;
 
-    char temp[8] = {0};
-    off_t next_table_block = -1;
-    memcpy(temp, &next_table_block, 8);
+    block.location = location;
+    block.next_table_block = -1;
 
-    cache.write_to_page(page, 0, temp, 8, location);
+    std::byte temp[16];
+
+
+    memcpy(temp, &block, sizeof(Table_Block));
+
+    cache.write_to_page(page, 0, temp, 16, location);
 
 }
 
@@ -794,6 +809,7 @@ void File::init_posting_block(off_t location)
     Page* page = cache.read_block(location);
 
     Posting_Block block;
+    block.location = location;
 
     cache.write_to_page(page, 0, &block, sizeof(Posting_Block), location);
 }
@@ -819,7 +835,7 @@ off_t File::get_table_block()   //FIX
 
 
     off_t output = 0;
-    memcpy(&output, page, 8);
+    memcpy(&output, page+8, 8);
 
     return output;
 }
@@ -889,7 +905,7 @@ Record File::get_record(off_t record_location, const Table& table, Transaction* 
     if(txn != nullptr)
     {
         Page* page = txn->private_cache_read(page_offset);
-        
+
         if(page != nullptr)
             return Record(page->buffer + record_offset, table);
     }
@@ -923,15 +939,16 @@ off_t File::write_record(Record &record, int txn_id, Table& table)
 
         init_data_node(data_block_location, txn_id);
         Data_Node new_data_node;
-        new_data_node.fill_ptr = record.length; 
+        new_data_node.location = data_block_location;
+        new_data_node.fill_ptr = record.length;
 
 
-        txn.acquire_exclusive_and_copy_if_needed(data_block_location);
+        txn.acquire_ownership_and_copy_if_needed(data_block_location);
 
         //write data node metadata
         txn.write_to_page(txn.private_cache_read(data_block_location), 0, &new_data_node, DATA_NODE_METADATA_SIZE, data_block_location);
 
-        //write record here 
+        //write record here
         txn.write_to_page(txn.private_cache_read(data_block_location), DATA_NODE_METADATA_SIZE, record.str.data(), record.length, data_block_location);
 
         return data_block_location+DATA_NODE_METADATA_SIZE;
@@ -942,21 +959,21 @@ off_t File::write_record(Record &record, int txn_id, Table& table)
     //latcher.lock(free_data_pointer);
 
     //make a copy
-    txn.acquire_exclusive_and_copy_if_needed(data_block_location);
+    txn.acquire_ownership_and_copy_if_needed(data_block_location);
     Page* page = txn.private_cache_read(data_block_location);
     Data_Node *node_copy = reinterpret_cast<Data_Node*>(page->buffer);
 
-    
+
 
     off_t record_location = 0;
-    int space_left = 4072 - node_copy->fill_ptr;
+    int space_left = 4064 - node_copy->fill_ptr;
 
 
 
     if(space_left > record.length)
     {
 
-        record_location = data_block_location + (24 + node_copy->fill_ptr);
+        record_location = data_block_location + (DATA_NODE_METADATA_SIZE + node_copy->fill_ptr);
 
         memcpy(node_copy->padding + node_copy->fill_ptr, record.str.data(), record.length);
         //cache.write_to_page(page, 24 + node->fill_ptr,record.str.data(), record.length, free_data_pointer);
@@ -965,7 +982,7 @@ off_t File::write_record(Record &record, int txn_id, Table& table)
 
 
     }
-else
+    else
     {
         // =====================================
         // 1. THE CONCURRENCY RE-CHECK
@@ -978,9 +995,9 @@ else
         if (actual_block_location != data_block_location) {
             // Another thread already fixed the overflow while we were waiting!
             // [Unlock Exclusive on data_block_location]
-            
+
             // Try again from the top with the new pointer
-            return write_record(record, txn_id, table); 
+            return write_record(record, txn_id, table);
         }
 
         // =====================================
@@ -996,13 +1013,13 @@ else
         // =====================================
         // 3. INITIALIZE & WRITE TO NEW PAGE
         // =====================================
-        txn.acquire_exclusive_and_copy_if_needed(data_block_location);
+        txn.acquire_ownership_and_copy_if_needed(data_block_location);
         Page *new_page = txn.private_cache_read(data_block_location);
 
         Data_Node *node = reinterpret_cast<Data_Node*>(new_page->buffer);
         init_data_node(data_block_location, txn_id);
 
-        record_location = data_block_location + (24 + node->fill_ptr);
+        record_location = data_block_location + (DATA_NODE_METADATA_SIZE + node->fill_ptr);
         memcpy(node->padding + node->fill_ptr, record.str.data(), record.length);
         node->fill_ptr += record.length;
 
@@ -1015,6 +1032,7 @@ else
 //@breif updates a record at a given location and column with a new value
 int File::update_record(Record &original_record,off_t location, int column_index, std::string& value, Table* table, int txn_id)
 {
+    Transaction& txn = database->transactions.at(txn_id);
     //first check if the column had been idnexed
     bool indexed = (table->columns[column_index].indexLocation != -1);
 
@@ -1042,12 +1060,12 @@ int File::update_record(Record &original_record,off_t location, int column_index
                 database->index_tree4.table = table;
 
                 //delete old key
-                if (database->index_tree4.delete_key(old_key, location, table->columns[column_index].indexLocation, txn_id) != 0) {
+                if (database->index_tree4.delete_key(old_key, location, table->columns[column_index].indexLocation, txn) != 0) {
                     return -1;
                 }
 
                 //insert new key
-                database->index_tree4.insert(new_key, location, table->columns[column_index].indexLocation, txn_id);
+                database->index_tree4.insert(new_key, location, table->columns[column_index].indexLocation, txn);
             }
 
 
@@ -1064,7 +1082,7 @@ int File::update_record(Record &original_record,off_t location, int column_index
         case Type::CHAR32:
         case Type::CHAR16:
         case Type::CHAR8:
-            delete_record(original_record, location, *table, txn_id); 
+            delete_record(original_record, location, *table, txn_id);
             strip_quotes(value);
 
             original_record.update_column(column_index, value, *table);
@@ -1087,6 +1105,7 @@ int File::delete_record(const Record &record, off_t location, const Table& table
 {
     //first we clear out the secondary keys it may have
 
+    Transaction& txn = database->transactions.at(txn_id);
 
     int column_index = 0;
     for (auto& index : table.columns)
@@ -1115,13 +1134,13 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                     {
                         assert(key.size() == 4);
                         if (database->index_tree4.
-                            delete_key(key, location, root_location, txn_id) != 0) {
+                            delete_key(key, location, root_location, txn) != 0) {
                             return -1;
                         }
                     }
                     else
                     {
-                        off_t posting_list_root = database->index_tree4.locate_exact(key, root_location, txn_id).leaf->values[database->index_tree4.locate_exact(key, root_location, txn_id).key_index];
+                        off_t posting_list_root = database->index_tree4.locate_exact(key, root_location, txn).leaf->values[database->index_tree4.locate_exact(key, root_location, txn).key_index];
                         Posting_Block *block = load_posting_block(posting_list_root);
                         delete_from_posting_list(posting_list_root, location);
 
@@ -1129,12 +1148,12 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                         {
                             if(block->next != 0)
                             {
-                                database->index_tree4.update_value(key, block->next, root_location, txn_id);
+                                database->index_tree4.update_value(key, block->next, root_location, txn);
                                 break;
                             }
                             else
                             {
-                                database->index_tree4.delete_key(key, location, root_location, txn_id);
+                                database->index_tree4.delete_key(key, location, root_location, txn);
                                 break;
                             }
                         }
@@ -1149,16 +1168,16 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                     if(is_primary_column)
                     {
                         assert(key.size() <= 32);
-                        if (database->index_tree32.delete_key(key, location, root_location, txn_id) != 0) {
+                        if (database->index_tree32.delete_key(key, location, root_location, txn) != 0) {
                             return -1;
                         }
                     }
                     else
                     {
-                        off_t posting_list_root = database->index_tree32.locate_exact(key, root_location, txn_id).leaf->values[database->index_tree32.locate_exact(key, root_location, txn_id).key_index];
+                        off_t posting_list_root = database->index_tree32.locate_exact(key, root_location, txn).leaf->values[database->index_tree32.locate_exact(key, root_location, txn).key_index];
                         if(posting_list_root % 4096 != 0)
                         {
-                            database->index_tree32.delete_key(key, location, root_location, txn_id);
+                            database->index_tree32.delete_key(key, location, root_location, txn);
                             break;
                         }
 
@@ -1169,12 +1188,12 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                         {
                             if(block->next != 0)
                             {
-                                database->index_tree32.update_value(key, block->next, root_location, txn_id);
+                                database->index_tree32.update_value(key, block->next, root_location, txn);
                                 break;
                             }
                             else
                             {
-                                database->index_tree32.delete_key(key, location, root_location, txn_id);
+                                database->index_tree32.delete_key(key, location, root_location, txn);
                                 break;
                             }
                         }
@@ -1188,16 +1207,16 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                     if(is_primary_column)
                     {
                         assert(key.size() <= 16);
-                        if (database->index_tree16.delete_key(key, location, root_location, txn_id) != 0) {
+                        if (database->index_tree16.delete_key(key, location, root_location, txn) != 0) {
                             return -1;
                         }
                     }
                     else
                     {
-                        off_t posting_list_root = database->index_tree16.locate_exact(key, root_location, txn_id).leaf->values[database->index_tree16.locate_exact(key, root_location, txn_id).key_index];
+                        off_t posting_list_root = database->index_tree16.locate_exact(key, root_location, txn).leaf->values[database->index_tree16.locate_exact(key, root_location, txn).key_index];
                         if(posting_list_root % 4096 != 0)
                         {
-                            database->index_tree16.delete_key(key, location, root_location, txn_id);
+                            database->index_tree16.delete_key(key, location, root_location, txn);
                             break;
                         }
 
@@ -1208,12 +1227,12 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                         {
                             if(block->next != 0)
                             {
-                                database->index_tree16.update_value(key, block->next, root_location, txn_id);
+                                database->index_tree16.update_value(key, block->next, root_location, txn);
                                 break;
                             }
                             else
                             {
-                                database->index_tree16.delete_key(key, location, root_location, txn_id);
+                                database->index_tree16.delete_key(key, location, root_location, txn);
                                 break;
                             }
                         }
@@ -1227,16 +1246,16 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                     if(is_primary_column)
                     {
                         assert(key.size() <= 8);
-                        if (database->index_tree8.delete_key(key, location, root_location, txn_id) != 0) {
+                        if (database->index_tree8.delete_key(key, location, root_location, txn) != 0) {
                             return -1;
                         }
                     }
                     else
                     {
-                        off_t posting_list_root = database->index_tree8.locate_exact(key, root_location, txn_id).leaf->values[database->index_tree8.locate_exact(key, root_location, txn_id).key_index];
+                        off_t posting_list_root = database->index_tree8.locate_exact(key, root_location, txn).leaf->values[database->index_tree8.locate_exact(key, root_location, txn).key_index];
                         if(posting_list_root % 4096 != 0)
                         {
-                            database->index_tree8.delete_key(key, location, root_location, txn_id);
+                            database->index_tree8.delete_key(key, location, root_location, txn);
                             break;
                         }
 
@@ -1247,12 +1266,12 @@ int File::delete_record(const Record &record, off_t location, const Table& table
                         {
                             if(block->next != 0)
                             {
-                                database->index_tree8.update_value(key, block->next, root_location, txn_id);
+                                database->index_tree8.update_value(key, block->next, root_location, txn);
                                 break;
                             }
                             else
                             {
-                                database->index_tree8.delete_key(key, location, root_location, txn_id);
+                                database->index_tree8.delete_key(key, location, root_location, txn);
                                 break;
                             }
                         }
@@ -1288,11 +1307,12 @@ template void File::generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(int
                           MyBtree32*,
                           MyBtree16*,
                           MyBtree8*,
-                          MyBtree4*);
+                          MyBtree4*,
+                          Transaction& txn);
 
-template Node4* File::load_node<Node4>(off_t, int);
-template void File::update_node<Node4>(Node4*, off_t, size_t, int);
-template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t, int);
+template Node4* File::load_node<Node4>(off_t, Transaction&);
+template void File::update_node<Node4>(Node4*, off_t, size_t, Transaction&);
+template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t, Transaction&);
 
 template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&,Table&, int);
 template void File::insert_secondary_index<MyBtree4>(std::string,Table&, MyBtree4&, off_t, int, int);
@@ -1301,17 +1321,17 @@ template void File::insert_secondary_index<MyBtree4>(std::string,Table&, MyBtree
 
 
 
-template Node8* File::load_node<Node8>(off_t, int);
-template void File::update_node<Node8>(Node8*, off_t, size_t, int);
-template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t, int);
+template Node8* File::load_node<Node8>(off_t, Transaction&);
+template void File::update_node<Node8>(Node8*, off_t, size_t, Transaction&);
+template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t, Transaction&);
 
 template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&,Table&, int);
 template void File::insert_secondary_index<MyBtree8>(std::string,Table&, MyBtree8&, off_t, int, int);
 //template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
 
-template Node16* File::load_node<Node16>(off_t, int);
-template void File::update_node<Node16>(Node16*, off_t, size_t, int);
-template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t, int);
+template Node16* File::load_node<Node16>(off_t, Transaction&);
+template void File::update_node<Node16>(Node16*, off_t, size_t, Transaction&);
+template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t, Transaction&);
 
 
 
@@ -1320,9 +1340,9 @@ template void File::insert_secondary_index<MyBtree16>(std::string,Table&, MyBtre
 //template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
 
 
-template Node32* File::load_node<Node32>(off_t, int);
-template void File::update_node<Node32>(Node32*, off_t, size_t, int);
-template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t, int);
+template Node32* File::load_node<Node32>(off_t, Transaction&);
+template void File::update_node<Node32>(Node32*, off_t, size_t, Transaction&);
+template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t, Transaction&);
 
 template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&,Table&, int);
 template void File::insert_secondary_index<MyBtree32>(std::string,Table&, MyBtree32&, off_t, int, int);

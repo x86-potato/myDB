@@ -4,6 +4,7 @@
 #include "../query/validator.hpp"
 
 
+
 std::string strip_quotes(const std::string &input)
 {
 

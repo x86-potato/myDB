@@ -4,6 +4,7 @@
 #include <cstring>
 #include <string>
 #include <arpa/inet.h>
+#include <type_traits>
 
 #include "../config.h"
 #include "../storage/file.hpp"
@@ -54,6 +55,8 @@ struct LocationData
 
 
 class File;
+class Transaction;
+
 template<typename NodeT, typename LeafNodeT, typename InternalNodeT>
 class BtreePlus {
 public:
@@ -91,17 +94,17 @@ public:
 
     //@brief insertes string a and corresponding value b
     void insert(
-        std::string insert_string, 
+        std::string insert_string,
         off_t &record_location,
         off_t root_location,
-        int txn_id);
+        Transaction& txn);
 
     //@brief deletes a key and its value
     int delete_key(
-        std::string delete_string, 
+        std::string delete_string,
         off_t record_location,
         off_t root_location,
-        int txn_id);
+        Transaction& txn);
 
 
     LocationData<LeafNodeType> locate_exact(
@@ -114,44 +117,46 @@ public:
     LocationData<LeafNodeType> locate_start(off_t root_location, Transaction& txn);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
-    std::vector<off_t> search(std::string search_string, off_t root_location);
+    std::vector<off_t> search(std::string search_string, off_t root_location, Transaction& txn);
 
     //@brief checks if the tree contains a certian key
     //@also responsible for locking the path to the key if it exists, caller is responsible for unlocking
     bool has_key(const std::string &key, Transaction& txn, off_t root_location);
 
+    bool has_secondary_key(const std::string &key, Transaction& txn, off_t root_location);
+
     //@brief prints current objects tree, assumes roo_node is defined and loaded
     void print_tree();
 
     //@brief creates the first node and loads it to the cache.
-    void init_root(off_t location, int txn_id);
+    void init_root(off_t location, Transaction& txn);
 
     //@brief returns LeafNode Type of the furthest left node
-    LeafNodeT* find_leftmost_leaf(off_t root_location);
+    LeafNodeT* find_leftmost_leaf(off_t root_location, Transaction& txn);
 
 
     //@brief update the value associated with a key
-    void update_value(std::string key, off_t new_value, off_t root_location, int txn_id);
+    void update_value(std::string key, off_t new_value, off_t root_location, Transaction& txn);
 private:
     //----------handle deletion----------------
-    bool check_underflow(NodeT* node);
-    void delete_index_in_node(int index, NodeT* node, int child_index);
-    void leaf_merge(InternalNodeT* parent,NodeT* current, int child_index);
-    void internal_underflow(NodeT* node);
-    void merge_internal(InternalNodeT* node, InternalNodeT* parent, int child_index);
-    bool attempt_borrow_internal(InternalNodeT* self, InternalNodeT* parent, int self_child_index);
-    void borrow_left_internal(InternalNodeT *self,InternalNodeT* parent, InternalNodeT* left, int child_index);
-    void borrow_right_internal(InternalNodeT *self,InternalNodeT* parent, InternalNodeT* right, int child_index);
-    bool attempt_borrow(NodeT *current, InternalNodeT *parent, int currents_child_index);
-    void borrow_left_leaf(NodeT* current, NodeT* left);
-    void borrow_right_leaf(NodeT* current, NodeT* right);
+    bool check_underflow(NodeT* node, Transaction& txn);
+    void delete_index_in_node(int index, NodeT* node, int child_index, Transaction& txn);
+    void leaf_merge(InternalNodeT* parent,NodeT* current, int child_index, Transaction& txn);
+    void internal_underflow(NodeT* node, Transaction& txn);
+    void merge_internal(InternalNodeT* node, InternalNodeT* parent, int child_index, Transaction& txn);
+    bool attempt_borrow_internal(InternalNodeT* self, InternalNodeT* parent, int self_child_index, Transaction& txn);
+    void borrow_left_internal(InternalNodeT *self,InternalNodeT* parent, InternalNodeT* left, int child_index, Transaction& txn);
+    void borrow_right_internal(InternalNodeT *self,InternalNodeT* parent, InternalNodeT* right, int child_index, Transaction& txn);
+    bool attempt_borrow(NodeT *current, InternalNodeT *parent, int currents_child_index, Transaction& txn);
+    void borrow_left_leaf(NodeT* current, NodeT* left, Transaction& txn);
+    void borrow_right_leaf(NodeT* current, NodeT* right, Transaction& txn);
 
     //----------handle insertion----------------
-    void insert_up_into(Insert_Up_Data data,off_t node_location, int txn_id);
-    void split_leaf(NodeT* node, int txn_id);
-    void split_internal(NodeT* node, int txn_id);
-    void insert_key_into_node(Insert_Up_Data data, NodeT* node, int txn_id);
-    void push_into_internal(InternalNodeT* target, char* value, int txn_id);
+    void insert_up_into(Insert_Up_Data data,off_t node_location, Transaction& txn);
+    void split_leaf(NodeT* node, Transaction& txn);
+    void split_internal(NodeT* node, Transaction& txn);
+    void insert_key_into_node(Insert_Up_Data data, NodeT* node, Transaction& txn);
+    void push_into_internal(InternalNodeT* target, char* value, Transaction& txn);
 
     //----------utill functions----------------
     LeafNodeT* traverse_to_leaf(char* to_search, off_t start_location, Transaction &txn);
@@ -159,7 +164,7 @@ private:
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int get_first_key_index_gte(char* to_locate, LeafNodeT* node);
     off_t get_next_leftmost_node_pointer(char* to_search,InternalNodeT *node);
-    int find_left_node_child_index(NodeT *node);
+    int find_left_node_child_index(NodeT *node, Transaction& txn);
     void print_recursive(NodeT* node, int depth, std::ostream& out);
     int get_underflow_amount();
     int leaf_lower_bound(NodeT* leaf, const std::string &key);

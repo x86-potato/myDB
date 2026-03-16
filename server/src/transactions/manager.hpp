@@ -10,8 +10,10 @@ public:
     LockManager(Cache &cache) : cache(cache) {}
 
     void acquire_shared(int txn_id, off_t page_location);
+    void acquire_ownership(int txn_id, off_t page_location);
     void acquire_exclusive(int txn_id, off_t page_location);
     void release_shared(int txn_id, off_t page_location);
+    void release_ownership(int txn_id, off_t page_location);
     void release_exclusive(int txn_id, off_t page_location);
 
 private:

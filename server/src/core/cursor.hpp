@@ -2,9 +2,11 @@
 #include "../config.h"
 #include "../relational/key.hpp"
 #include "btree.hpp"
-#include "../core/database.hpp"
 #include <optional>
 #include <algorithm>
+
+class Database;
+class Transaction;
 
 
 
