@@ -1,5 +1,6 @@
 /.vscode
 /server/database.db
+/client/benchark.db
 /server/databasebig.db
 /server/tests/*
 /server/obj/*
@@ -7,4 +8,8 @@
 /server/users.csv
 /server/products.csv
 /server/orders.csv
-
+*.sql
+*/__pycache__/*
+*.pyc
+/server/wal.log
+/.zed

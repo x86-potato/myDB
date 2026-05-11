@@ -1,3 +1,3 @@
-insert into users (500001, "vlad", 21);
-insert into users (500002, "john", 22);
-insert into users (500003, "doe", 23);
+insert into users (1, "test");
+insert into users (1000, "test");
+insert into users (50000, "test");
