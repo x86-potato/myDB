@@ -2,10 +2,17 @@
 
 Database::Database ()
 {
-
+    // Reserve enough buckets to prevent rehashing under load.
+    // unordered_map rehash moves Transaction objects, invalidating any
+    // Transaction& references held by concurrent executor threads.
+    transactions.reserve(4096);
 
     file = new File();
     file->database = this;
+
+    wal = new WAL(file);
+
+    wal->recover(*this);
 
     index_tree32.file = file;
     index_tree16.file = file;
@@ -20,9 +27,6 @@ Database::Database ()
         table.table_print();
     }
 
-    wal = new WAL(file);
-
-    wal->recover(*this);
 
 }
 
@@ -30,7 +34,7 @@ int Database::insert_table(Table& table, int txn_id)
 {
     if (table.columns.size() == 0)
     {
-        std::cout << "Error: Cannot create table with no columns." << std::endl;
+        std::cout << "Error: Cannot create table with no columns." << "\n";
         return 1;
     }
 
@@ -49,7 +53,7 @@ Table& Database::get_table(const std::string& tableName)
     return tableMap.at(tableName);
 }
 
-int Database::insert(const std::string& tableName, const StringVec& args, int txn_id)
+int Database::insert(const std::string& tableName, const StringVec& args, int txn_id, std::string* error_message)
 {
 
     Table &table = tableMap.at(tableName);
@@ -59,13 +63,23 @@ int Database::insert(const std::string& tableName, const StringVec& args, int tx
     std::string key;
     off_t insertion_result = 0;
 
-    auto it = transactions.find(txn_id);
-    if (it == transactions.end()) {
-        std::cout << "Error: No active transaction for insert operation." << std::endl;
-        return 1;
+    // Get the Transaction pointer under txn_mutex so we never race with
+    // commit_transaction's erase() which also holds txn_mutex.
+    Transaction* txn_ptr = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(txn_mutex);
+        auto it = transactions.find(txn_id);
+        if (it == transactions.end()) {
+            const std::string message = "Error: No active transaction for insert operation.";
+            std::cout << message << "\n";
+            if (error_message != nullptr) { *error_message = message; }
+            return 1;
+        }
+        txn_ptr = &it->second;
     }
-    Transaction& txn = it->second;
+    Transaction& txn = *txn_ptr;
 
+    //primary column type
     switch (table.columns[0].type)
     {
         case Type::INTEGER:
@@ -76,38 +90,51 @@ int Database::insert(const std::string& tableName, const StringVec& args, int tx
             key.append(reinterpret_cast<const char*>(&big_endian), sizeof(big_endian));
 
 
-            insertion_result = file->insert_primary_index<MyBtree4>(key,record, index_tree4, table, txn_id);
+            insertion_result = file->insert_primary_index<MyBtree4>(key, record, index_tree4, table, txn);
             break;
         }
         case Type::CHAR8:
             key = args[0];
-            insertion_result = file->insert_primary_index<MyBtree8>(strip_quotes(key),record, index_tree8, table, txn_id);
+            insertion_result = file->insert_primary_index<MyBtree8>(strip_quotes(key), record, index_tree8, table, txn);
             break;
         case Type::CHAR16:
             key = args[0];
-            insertion_result = file->insert_primary_index<MyBtree16>(strip_quotes(key),record, index_tree16, table, txn_id);
+            insertion_result = file->insert_primary_index<MyBtree16>(strip_quotes(key), record, index_tree16, table, txn);
             break;
         case Type::CHAR32:
             key = args[0];
-            insertion_result = file->insert_primary_index<MyBtree32>(strip_quotes(key),record, index_tree32, table, txn_id);
+            insertion_result = file->insert_primary_index<MyBtree32>(strip_quotes(key), record, index_tree32, table, txn);
             break;
         default:
-            std::cout << "Error: Column type not recognized";
+        {
+            const std::string message = "Error: Column type not recognized";
+            std::cout << message;
+            if (error_message != nullptr) {
+                *error_message = message;
+            }
             return 1;
+        }
 
     }
 
     if(insertion_result == -1)
     {
+        std::string duplicate_key;
         if(table.columns[0].type == Type::INTEGER)
         {
             int32_t number = std::stoi(args[0]);
+            duplicate_key = std::to_string(number);
 
-            std::cout << "Insertion Error key: " << number << " is already in the index tree\n";
+            //std::cout << "Insertion Error key: " << number << " is already in the index tree\n";
         }
         else
         {
-            std::cout << "Insertion Error key: " << key << " is already in the index tree\n";
+            duplicate_key = key;
+            //std::cout << "Insertion Error key: " << key << " is already in the index tree\n";
+        }
+
+        if (error_message != nullptr) {
+            *error_message = "Insert failed: duplicate primary key " + duplicate_key;
         }
         return 1;
     }
@@ -174,9 +201,9 @@ int Database::erase(const std::string& tableName, Plan& plan, Transaction* txn)
 }
 
 
-void Database::update_index_location(Table &table, int column_index, off_t new_index_location)
+void Database::update_index_location(Table &table, int column_index, off_t new_index_location, Transaction& txn)
 {
-    file->update_table_index_location(table, column_index, new_index_location);
+    file->update_table_index_location(table, column_index, new_index_location, txn);
 }
 
 void Database::update_root_pointer(Table &table, off_t old_root, off_t new_root)
@@ -208,17 +235,30 @@ int Database::create_transaction()
 
 int Database::commit_transaction(int txn_id)
 {
-    std::lock_guard<std::mutex> lock(txn_mutex);
-    auto find = transactions.find(txn_id);
-    if(find == transactions.end())
+    // Phase 1: get pointer under lock (brief — just a map lookup)
+    Transaction* txn_ptr = nullptr;
     {
-        std::cout << "Error: Transaction ID " << txn_id << " not found." << std::endl;
-        return -1;
+        std::lock_guard<std::mutex> lock(txn_mutex);
+        auto it = transactions.find(txn_id);
+        if (it == transactions.end())
+        {
+            std::cout << "Error: Transaction ID " << txn_id << " not found." << "\n";
+            return -1;
+        }
+        txn_ptr = &it->second;
     }
-    transactions.at(txn_id).commit();
 
-    transactions.erase(txn_id);
-    std::cout << "commited";
+    // Phase 2: commit WITHOUT holding txn_mutex.
+    // WAL I/O and cache writes can take milliseconds; holding the mutex here
+    // serialized all create_transaction / commit_transaction calls and
+    // caused the map to be in a modified state while other threads read it.
+    txn_ptr->commit();
+
+    // Phase 3: erase under lock (brief — just a map erase)
+    {
+        std::lock_guard<std::mutex> lock(txn_mutex);
+        transactions.erase(txn_id);
+    }
 
 
     return 0;

@@ -1,4 +1,5 @@
 #include "builder.hpp"
+#include "../../server/session.hpp"
 #include <iomanip>
 #include <iterator>
 #include <variant>
@@ -54,34 +55,34 @@ void Pipeline::build_buckets()
 
 void Pipeline::print_buckets()
 {
-    std::cout << "Scan candidates: " << scan_candidates_.size() << std::endl;
+    std::cout << "Scan candidates: " << scan_candidates_.size() << "\n";
     for (const auto& pred : scan_candidates_)
     {
         std::cout << "  Predicate on table "
                   << std::get<ColumnOperand>(pred->left).table
                   << " column "
                   << std::get<ColumnOperand>(pred->left).column
-                  << std::endl;
+                  << "\n";
     }
 
-    std::cout << "Filter candidates: " << filter_candidates_.size() << std::endl;
+    std::cout << "Filter candidates: " << filter_candidates_.size() << "\n";
     for (const auto& pred : filter_candidates_)
     {
         std::cout << "  Predicate on table "
                   << std::get<ColumnOperand>(pred->left).table
                   << " column "
                   << std::get<ColumnOperand>(pred->left).column
-                  << std::endl;
+                  << "\n";
     }
 
-    std::cout << "Join candidates: " << join_candidates_.size() << std::endl;
+    std::cout << "Join candidates: " << join_candidates_.size() << "\n";
     for (const auto& pred : join_candidates_)
     {
         std::cout << "  Predicate on table "
                   << std::get<ColumnOperand>(pred->left).table
                   << " column "
                   << std::get<ColumnOperand>(pred->left).column
-                  << std::endl;
+                  << "\n";
     }
 }
 
@@ -266,9 +267,9 @@ void Pipeline::ExecuteDelete()
         deleted_count++;
 
         root->reset();
-        //std::cout << "Deleted " << deleted_count << " records." << std::endl;
+        //std::cout << "Deleted " << deleted_count << " records." << "\n";
     }
-    std::cout << "Deleted " << deleted_count << " records." << std::endl;
+    std::cout << "Deleted " << deleted_count << " records." << "\n";
 }
 
 
@@ -295,12 +296,45 @@ void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
         modified_count++;
     }
 
-    std::cout << "Updated " << modified_count << " records." << std::endl;
+    std::cout << "Updated " << modified_count << " records." << "\n";
 }
 
 
-void Pipeline::Execute()
+void Pipeline::Execute(Session* session)
 {
+    bool send_packets = (session != nullptr && !session->is_admin());
+
+    if (send_packets) {
+        std::vector<const Table*> tables;
+        for (const auto& table_name : path_.tables) {
+            tables.push_back(&database_.get_table(table_name));
+        }
+
+        Output current_output;
+        if (!root->next(current_output)) {
+            session->send_metadata(tables, false);
+            return;
+        }
+
+        session->send_metadata(tables, true);
+
+        while (true) {
+            Output next_output;
+            bool has_next = root->next(next_output);
+            session->send_row(current_output.tuples_, !has_next);
+
+            if (!has_next) {
+                break;
+            }
+
+            current_output = std::move(next_output);
+        }
+
+        return;
+    }
+
+    // --- Admin / stdout path (unchanged) ---
+
     // Calculate column widths based on type
     std::vector<int> column_widths;
     std::vector<std::string> column_headers;
@@ -384,7 +418,7 @@ void Pipeline::Execute()
     // Print bottom border
     print_separator();
 
-    std::cout << "Returned " << i << " records." << std::endl;
+    std::cout << "Returned " << i << " records." << "\n";
 }
 
 

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unordered_map>
+#include <unordered_set>
 #include <cassert>
 #include <cstring>
 #include <mutex>
@@ -99,6 +100,9 @@ private:
     std::byte* cache_start;
     bool cache_index_in_use[CACHE_PAGE_LIMIT] = {false};
     std::unordered_map<off_t, Page*> page_table;
+
+    std::unordered_set<off_t> dirty_page_list;
+    std::mutex dirty_list_mutex;
 
 
 

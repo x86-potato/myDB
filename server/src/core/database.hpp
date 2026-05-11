@@ -50,9 +50,9 @@ public:
     const Table& get_table(const std::string& tableName) const;
     Table& get_table(const std::string& tableName);
 
-    void update_index_location(Table &table, int column_index, off_t new_index_location);
+    void update_index_location(Table &table, int column_index, off_t new_index_location, Transaction& txn);
     void update_root_pointer(Table &table, off_t old_root, off_t new_root);
-    int insert(const std::string& tableName, const StringVec& args, int txn_id);
+    int insert(const std::string& tableName, const StringVec& args, int txn_id, std::string* error_message = nullptr);
     int erase(const std::string& tableName, Plan &plan, Transaction* txn);
 
     //@returns a new transaction id

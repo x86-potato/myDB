@@ -10,6 +10,7 @@
 #include "../storage/file.hpp"
 #include "../core/table.hpp"
 #include "../transactions/transaction.hpp"
+#include "../transactions/reader.hpp"
 
 template<size_t KeySize, size_t MaxKeys>
 struct Node {
@@ -17,18 +18,15 @@ struct Node {
     char keys[MaxKeys][KeySize] = { 0 };
     uint16_t current_key_count = 0;
     bool is_leaf = true;
-    off_t parent = 0;
 };
 template<size_t KeySize, size_t MaxKeys>
 struct InternalNode : Node<KeySize, MaxKeys> {
     off_t children[MaxKeys + 1] = { 0 };
-    //char padding[3904] = { 0 };
 };
 template<size_t KeySize, size_t MaxKeys>
 struct LeafNode : Node<KeySize, MaxKeys> {
     off_t values[MaxKeys] = { 0 };
     off_t next_leaf = 0;
-    //char padding[3904] = { 0 };
 };
 using Node32 = Node<32,MaxKeys_32>;
 using Node16 = Node<16, MaxKeys_16>;
@@ -49,6 +47,7 @@ using LeafNode4 = LeafNode<4, MaxKeys_4>;
 template<typename LeafNodeT>
 struct LocationData
 {
+    SharedPageGuard leaf_guard;
     LeafNodeT* leaf;
     int key_index;
 };
@@ -96,34 +95,39 @@ public:
     void insert(
         std::string insert_string,
         off_t &record_location,
-        off_t root_location,
-        Transaction& txn);
+        Column& column,
+        Transaction& txn,
+        std::vector<off_t>& path_stack);
 
     //@brief deletes a key and its value
     int delete_key(
         std::string delete_string,
         off_t record_location,
-        off_t root_location,
+        Column& column,
         Transaction& txn);
 
 
     LocationData<LeafNodeType> locate_exact(
-        std::string key, off_t root_location, Transaction& txn);
+        std::string key, const Column& column, Transaction& txn);
     LocationData<LeafNodeType> locate_gte(
-        std::string key, off_t root_location, Transaction& txn);
+        std::string key, const Column& column, Transaction& txn);
     LocationData<LeafNodeType> locate_gt(
-        std::string key, off_t root_location, Transaction& txn);
+        std::string key, const Column& column, Transaction& txn);
 
-    LocationData<LeafNodeType> locate_start(off_t root_location, Transaction& txn);
+    LocationData<LeafNodeType> locate_start(const Column& column, Transaction& txn);
 
     //@brief searches the index tree for a value returns offset of the record, if no is found, return 0;
     std::vector<off_t> search(std::string search_string, off_t root_location, Transaction& txn);
 
     //@brief checks if the tree contains a certian key
     //@also responsible for locking the path to the key if it exists, caller is responsible for unlocking
-    bool has_key(const std::string &key, Transaction& txn, off_t root_location);
+    bool has_key(const std::string &key, 
+        Transaction& txn, 
+        Column &column,
+        std::vector<off_t>& path_stack
+    );
 
-    bool has_secondary_key(const std::string &key, Transaction& txn, off_t root_location);
+    bool lock_secondary_key(const std::string &key, Transaction& txn, off_t root_location);
 
     //@brief prints current objects tree, assumes roo_node is defined and loaded
     void print_tree();
@@ -152,14 +156,20 @@ private:
     void borrow_right_leaf(NodeT* current, NodeT* right, Transaction& txn);
 
     //----------handle insertion----------------
-    void insert_up_into(Insert_Up_Data data,off_t node_location, Transaction& txn);
-    void split_leaf(NodeT* node, Transaction& txn);
-    void split_internal(NodeT* node, Transaction& txn);
+    void insert_up_into(Insert_Up_Data data,
+        off_t node_location, 
+        Transaction& txn,
+        Column& column,
+        std::vector<off_t>& stack);
+    void split_leaf(NodeT* node, 
+        Transaction& txn, Column& column, std::vector<off_t>& path_stack);
+    void split_internal(NodeT* node, Transaction& txn, Column& column,
+        std::vector<off_t>& path_stack);
     void insert_key_into_node(Insert_Up_Data data, NodeT* node, Transaction& txn);
     void push_into_internal(InternalNodeT* target, char* value, Transaction& txn);
 
     //----------utill functions----------------
-    LeafNodeT* traverse_to_leaf(char* to_search, off_t start_location, Transaction &txn);
+    LeafNodeT* traverse_to_leaf(char* to_search, SharedPageGuard& current_guard, off_t start_location, Transaction &txn);
     int find_child_index(InternalNodeT* parent, off_t child);
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int get_first_key_index_gte(char* to_locate, LeafNodeT* node);

@@ -116,7 +116,7 @@ public:
 
     template <typename MyBtree>
     off_t insert_primary_index(
-        std::string key,Record &record, MyBtree &tree, Table &table, int txn_id);
+        std::string key, Record &record, MyBtree &tree, Table &table, Transaction& txn);
 
     template <typename MyBtree>
     void insert_secondary_index(std::string key, Table &table, MyBtree &tree, off_t record_location, int index, int txn_id);
@@ -164,14 +164,15 @@ public:
     template<typename BtreeT>
     void print_leaves(off_t disk_node_offset);
 
-    off_t update_table_index_location(Table &table, int column_index, off_t new_index_value);
+    off_t update_table_record_block_location(Table &table, off_t new_record_block_location);
+    off_t update_table_index_location(Table &table, int column_index, off_t new_index_value, Transaction& txn);
 
     template <typename Node32,typename Node16, typename Node8, typename Node4>
     off_t insert_table(Table &table, int txn_id);
     std::vector<Table> load_tables();
 
     int update_record(Record &original_record,off_t location, int column_index, std::string &value, Table* table, int txn_id);
-    off_t write_record(Record &record, int txn_id, Table& table);
+    off_t write_record(Record &record, Transaction& txn, Table& table);
     Record get_record(off_t record_location, const Table& table, Transaction* txn = nullptr);
     int delete_record(const Record &record, off_t location, const Table& table, int txn_id);
 

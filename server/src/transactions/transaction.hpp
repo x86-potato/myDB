@@ -10,11 +10,11 @@ class WAL;
 class Transaction {
 private:
     std::unordered_map<off_t, Page> pages;
-    Cache& cache;
     LockManager &lock_manager;
 
 
 public:
+    Cache& cache;
     size_t txn_id;
     WAL &wal;
 
@@ -53,9 +53,13 @@ public:
 
     bool acquire_ownership_and_copy_if_needed(off_t page_location);
 
+    void try_release_ownership(off_t page_location);
+
     void try_acquire_shared(off_t page_location);
 
     void try_release_shared(off_t page_location);
+
+    void print_txn_stat();
 
     //@ mutable
     Page* private_cache_read(off_t page_location);

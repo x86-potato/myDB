@@ -40,7 +40,7 @@ void Parser::parserError(const char* message)
     Token* curr = iterator.getCurr();
     const std::string name = curr ? curr->name : "<no-token>";
     std::cout << "PARSER ERROR: UNEXPECTED TOKEN "
-              << name << " " << message << std::endl;
+              << name << " " << message << "\n";
 }
 
 int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)

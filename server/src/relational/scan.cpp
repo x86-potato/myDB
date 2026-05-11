@@ -57,7 +57,6 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate, Tr
                 throw std::runtime_error("Unsupported data type for indexed column");
         }
 
-        tree_root_ = index_location;
 
         cursor_->table = &const_cast<Table&>(table_);
         cursor_->column_index = table_.get_column_index(indexedColumnName);
@@ -101,7 +100,6 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate, Tr
                 throw std::runtime_error("Unsupported data type for indexed column");
         }
 
-        tree_root_ = index_location;
 
         cursor_->table = &const_cast<Table&>(table_);
         cursor_->column_index = 0;
@@ -166,7 +164,7 @@ void Scan::reset()
 {
     if(mode_ == ScanMode::FULL_SCAN)
     {
-        cursor_->set_start(tree_root_);
+        cursor_->set_start();
     }
     else if(mode_ == ScanMode::INDEX_SCAN)//TODO: speed up for secondary indexing.
     {
@@ -174,14 +172,14 @@ void Scan::reset()
         {
             case AST::Op::EQ:
             case AST::Op::GTE:
-                cursor_->set_gte(index_key_, tree_root_);
+                cursor_->set_gte(index_key_);
                 break;
             case AST::Op::GT:
-                cursor_->set_gt(index_key_, tree_root_);
+                cursor_->set_gt(index_key_);
                 break;
             case AST::Op::LT:
             case AST::Op::LTE:
-                cursor_->set_start(tree_root_);
+                cursor_->set_start();
                 break;
             default:
                 throw std::runtime_error("Unsupported operation");
@@ -212,7 +210,7 @@ void Scan::set_key(const Key& key)
 {
     if (cursor_)
     {
-        cursor_->set_gte(key, tree_root_);
+        cursor_->set_gte(key);
     }
 }
 
@@ -250,12 +248,11 @@ bool Scan::set_key_on_column(const Key& key, const std::string& column_name)
             throw std::runtime_error("Unsupported data type for indexed column");
     }
 
-    tree_root_ = col.indexLocation;
 
     cursor_->db = &database_;
     cursor_->table = &const_cast<Table&>(table_);
     started = false;
-    return cursor_->set_gte(key, tree_root_);
+    return cursor_->set_gte(key);
 }
 
 
@@ -306,28 +303,26 @@ bool Scan::next(Output& output)
         started = true;
         
         if (mode_ == ScanMode::FULL_SCAN) {
-            // FIX: Check if set_start failed (empty table)
-            if (!cursor_->set_start(tree_root_)) {
+            if (!cursor_->set_start()) {
                 return false; 
-        }
+            }
         } else {
             bool found = false;
             switch (pred_->op) {
                 case AST::Op::EQ:
                 case AST::Op::GTE:
-                    found = cursor_->set_gte(index_key_, tree_root_);
+                    found = cursor_->set_gte(index_key_);
                     break;
                 case AST::Op::GT:
-                    found = cursor_->set_gt(index_key_, tree_root_);
+                    found = cursor_->set_gt(index_key_);
                     break;
                 case AST::Op::LT:
                 case AST::Op::LTE:
-                    found = cursor_->set_start(tree_root_);
+                    found = cursor_->set_start();
                     break;
                 default:
                     throw std::runtime_error("Unsupported operation");
             }
-            // FIX: Check if the initial seek failed
             if (!found) {
                 return false;
             }

@@ -2,7 +2,7 @@
 
 void throwError(const char *msg)
 {
-    std::cout << "VALIDATOR ERROR: " << msg << std::endl;
+    std::cout << "VALIDATOR ERROR: " << msg << "\n";
 }
 
 bool validateInt(const std::string& str)

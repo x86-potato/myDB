@@ -2,20 +2,20 @@
 
 
 void Server::start() {
-    std::cout << "Listening on port 5432" << std::endl;
+    std::cout << "Listening on port 5432" << "\n";
 
     std::thread ([this]() {
         admin_session.session_id = 0; // Admin session has a reserved ID of 0
         admin_session.run_admin(*this);
     }).detach();
 
-    //std::cout << "Admin CLI ready. Type 'exit' to quit." << std::endl;
+    //std::cout << "Admin CLI ready. Type 'exit' to quit." << "\n";
 
 
     //current_session_id = 1;
     server_fd = socket(AF_INET, SOCK_STREAM, 0); 
     if (server_fd == -1) {
-        std::cerr << "Failed to create socket" << std::endl;
+        std::cerr << "Failed to create socket" << "\n";
         return;
     }
     int opt = 1;
@@ -26,7 +26,7 @@ void Server::start() {
         &opt, 
         sizeof(opt)) == -1)
     {
-        std::cerr << "Failed to set socket options" << std::endl;
+        std::cerr << "Failed to set socket options" << "\n";
         return;
     }
 
@@ -36,19 +36,24 @@ void Server::start() {
     address.sin_port = htons(5432);
 
     if(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        std::cerr << "Failed to bind socket" << std::endl;
+        std::cerr << "Failed to bind socket" << "\n";
         return;
     }
 
-    if(listen(server_fd, 3) < 0) {
-        std::cerr << "Failed to listen on socket" << std::endl;
+    if(listen(server_fd, SOMAXCONN) < 0) {
+        std::cerr << "Failed to listen on socket" << "\n";
+        return;
+    }
+
+    if (active_sessions.size() >= MAX_SESSIONS*100) {
+        std::cerr << "Maximum number of sessions reached. Cannot accept new connections." << "\n";
         return;
     }
     
     while (true) {
         int client_fd = accept(server_fd, nullptr, nullptr);
         if (client_fd < 0) {
-            std::cerr << "Failed to accept connection" << std::endl;
+            std::cerr << "Failed to accept connection" << "\n";
             continue;
         }
 
@@ -82,8 +87,11 @@ void Server::remove_session(int session_id) {
     auto it = active_sessions.find(session_id);
     if (it != active_sessions.end()) {
         active_sessions.erase(it);
-        std::cout << "Session with ID " << session_id << " removed." << std::endl;
+        close(it->second->client_fd);
+
+        std::cout << "Session with ID " << session_id << " removed." << "\n";
+
     } else {
-        std::cout << "Session with ID " << session_id << " not found." << std::endl;
+        std::cout << "Session with ID " << session_id << " not found." << "\n";
     }
 }

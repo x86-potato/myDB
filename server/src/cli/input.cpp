@@ -24,7 +24,7 @@ void CLI::run(Server& server) {
             auto end_time = std::chrono::high_resolution_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-            std::cout << "\nExecution time: " << elapsed.count() << " µs\ndb> " << std::flush;
+            std::cout << "\nExecution time: " << elapsed.count() << " µs\ndb> " << "\n";
 
         }
 

@@ -3,6 +3,9 @@
 
 void LockManager::acquire_shared(int txn_id, off_t page_location)
 {
+    cache.read_block(page_location); // Ensure the page is in the cache
+
+
     cache.cache_lock.lock(); // Lock the cache to ensure thread safety while accessing the page
     NodeLRU* node = cache.lru.page_to_node[page_location];
     cache.cache_lock.unlock(); // Unlock the cache after accessing the page
@@ -12,10 +15,12 @@ void LockManager::acquire_shared(int txn_id, off_t page_location)
 
 void LockManager::acquire_ownership(int txn_id, off_t page_location)
 {
+    NodeLRU* node;
+    {
+        std::lock_guard<std::mutex> lock(cache.cache_lock); // Lock the cache to ensure thread safety while accessing the page
+        node = cache.lru.page_to_node[page_location];
+    }
 
-    cache.cache_lock.lock(); // Lock the cache to ensure thread safety while accessing the page
-    NodeLRU* node = cache.lru.page_to_node[page_location];
-    cache.cache_lock.unlock(); // Unlock the cache after accessing the page
 
 
     node->owner_mutex.lock();

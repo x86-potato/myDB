@@ -110,8 +110,6 @@ private:
     int current_slot = 0;
     off_t current_block_location = 0;
 
-    off_t tree_root_ = 0;
-
 
     bool is_inner_ = false;
 

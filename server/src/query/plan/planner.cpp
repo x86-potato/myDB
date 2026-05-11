@@ -22,7 +22,7 @@ Plan::Plan(const std::string &tableName, const AST::Condition &query)
 {
     if(!query.root)
     {
-        std::cerr << "Error: Invalid condition expression." << std::endl;
+        std::cerr << "Error: Invalid condition expression." << "\n";
         return;
     }
     paths.push_back(Path{.tables = {tableName}, .predicates = {},}); // start with one path

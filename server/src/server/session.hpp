@@ -13,6 +13,7 @@ struct Session {
     int session_id = -1;
     int client_fd = -1;
     int current_transaction_id = -1; // -1 means no transaction
+    bool silent = false; // suppress stderr error output (used by bench sessions)
 
 
 
@@ -45,7 +46,7 @@ struct Session {
 
     void send_ok();
     void send_error(const std::string& error_message);
-    void send_metadata(std::vector<const Table*> tables);
+    void send_metadata(std::vector<const Table*> tables, bool more_packets);
     void send_row(std::vector<OutputTuple>& tuples, bool last_packet);
     void send_affected(int count);
 

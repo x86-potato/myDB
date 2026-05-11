@@ -2,6 +2,12 @@
 #include "../core/database.hpp"
 #include <algorithm>
 
+namespace {
+constexpr off_t kTableBlockSelfOffset = 0;
+constexpr off_t kTableBlockNextOffset = sizeof(off_t);
+constexpr off_t kTableBlockPayloadOffset = sizeof(Table_Block);
+}
+
 File::File()
 {
     index_block_count = 0;
@@ -34,7 +40,7 @@ File::File()
 
 
 
-        //std::cout << "table block,root node, root data: "<< table_block_pointer << " " << free_data_pointer << std::endl;
+        //std::cout << "table block,root node, root data: "<< table_block_pointer << " " << free_data_pointer << "\n";
 
         //primary_table = load_table();
     }
@@ -44,7 +50,7 @@ File::File()
 
         table_linked_list_head = get_table_block();
 
-        //std::cout << "table block,root node, root data: "<< table_block_pointer   << " " << free_data_pointer << std::endl;
+        //std::cout << "table block,root node, root data: "<< table_block_pointer   << " " << free_data_pointer << "\n";
 
     }
 }
@@ -59,39 +65,35 @@ void File::write_page_to_file(const void* data, off_t offset)
 
 template <typename MyBtree>
 off_t File::insert_primary_index(
-    std::string key,Record &record, MyBtree &tree, Table &table, int txn_id)
+    std::string key, Record &record, MyBtree &tree, Table &table, Transaction& txn)
 {
 
     using NodeT = typename MyBtree::NodeType;
-    Transaction& txn = database->transactions.at(txn_id);
-    std::cout << "Transaction " << txn_id << " attempting to insert key: " << key << " into primary index\n";
-
 
     //here we would lock it as parent lock
     off_t root_location = table.columns[0].indexLocation;
 
+    std::vector<off_t> path;
+    path.reserve(4);
+
 
     //check if this key is in the index already
     //locks aquired automatically
-    if (tree.has_key(key, txn, root_location))
+    if (tree.has_key(key, txn, table.columns[0], path))
     {
         return -1;
     }
 
-    off_t record_location = this->write_record(record, txn_id, table);
+    off_t record_location = this->write_record(record, txn, table);
     if(record_location == -1)
     {
         return -1;
     }
-    tree.insert(key, record_location,root_location, txn);
-
-    std::cout << database->transactions.at(txn_id).txn_id << " inserted record at location " << record_location << " with key " << key << "\n";
-
+    tree.insert(key, record_location, table.columns[0], txn, path);
 
     if(table.columns[0].indexLocation != root_location)
     {
-        table.columns[0].indexLocation = root_location;
-        database->update_index_location(table, 0, table.columns[0].indexLocation);
+        database->update_index_location(table, 0, table.columns[0].indexLocation, txn);
     }
 
 
@@ -103,105 +105,127 @@ template <typename MyBtree>
 void File::insert_secondary_index(
     std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index, int txn_id)
 {
-    Transaction& txn = database->transactions.at(txn_id);
-    using NodeT = typename MyBtree::NodeType;
-    off_t root = table.columns[column_index].indexLocation;
-    //NodeT *loaded_node = load_node<NodeT>(root, txn);
-    //cache->pin_page(root);
-    //tree.root_node = loaded_node;
-    //tree.tree_root = root;
+    // Transaction& txn = database->transactions.at(txn_id);
+    // using NodeT = typename MyBtree::NodeType;
+    // off_t root = table.columns[column_index].indexLocation;
+    // //NodeT *loaded_node = load_node<NodeT>(root, txn);
+    // //cache->pin_page(root);
+    // //tree.root_node = loaded_node;
+    // //tree.tree_root = root;
 
-    LocationData<typename MyBtree::LeafNodeType> location = tree.locate_exact(key, root, txn);
+    // LocationData<typename MyBtree::LeafNodeType> location = tree.locate_exact(key, table.columns[column_index], txn);
+
+    // //aquire locks here
+    // if (location.key_index == -1)
+    // {
+    //     //if no key, aquire locks as if its a primary tree.
+    //     tree.has_key(key, txn, table.columns[column_index]);
+    // }
+    // else {
+    //     //if the key is in the tree, yet its optimized, meaning it will change
+    //     if(location.leaf->values[location.key_index] % 4096 != 0)
+    //     {
+    //         //lock the block with the key
+    //         tree.lock_secondary_key(key, txn, root);
+    //     }
+    //     // if the key is in the tree, but we have a posting list,
+    //     // no lock is needed on the tree, we will only get locks on posting blocks.
+    //     else if (location.leaf->values[location.key_index] % 4096 == 0)
+    //     {
+    //         //lock the posting list blocks
+    //         off_t block_location = location.leaf->values[location.key_index];
+    //         Posting_Block *block = load_posting_block(block_location);
+
+    //     }
+
+    // }
 
 
+    // // Key doesn't exist - insert new entry
+    // if(location.key_index == -1)
+    // {
+    //     //lock path to the new key
+    //     tree.has_key(key, txn, table.columns[column_index]);
+    //     tree.insert(key, record_location, table.columns[column_index], txn);
 
+    //     //TODO: fix
+    //     //update_node<typename MyBtree::NodeType>(tree.root_node, tree.tree_root, sizeof(typename MyBtree::InternalNodeType));
 
-    // Key doesn't exist - insert new entry
-    if(location.key_index == -1)
-    {
+    //     // Update root if changed
+    //     if(root != table.columns[column_index].indexLocation)
+    //     {
+    //         table.columns[column_index].indexLocation = root;
+    //         database->update_index_location(table, column_index, table.columns[column_index].indexLocation, txn);
+    //     }
+    //     return;
+    // }
 
-        //lock path to the new key
-        tree.has_key(key, txn, root);
-        tree.insert(key, record_location, root, txn);
+    // // Key exists - add to posting list
+    // off_t value = location.leaf->values[location.key_index];
 
-        //TODO fix
-        //update_node<typename MyBtree::NodeType>(tree.root_node, tree.tree_root, sizeof(typename MyBtree::InternalNodeType));
+    // // First duplicate - convert single pointer to posting list
+    // if(value % 4096 != 0 || value == 0)
+    // {
+    //     off_t block_location = alloc_block();
+    //     init_posting_block(block_location);
 
-        // Update root if changed
-        if(root != table.columns[column_index].indexLocation)
-        {
-            table.columns[column_index].indexLocation = root;
-            database->update_index_location(table, column_index, table.columns[column_index].indexLocation);
-        }
-        return;
-    }
+    //     Posting_Block *block = load_posting_block(block_location);
+    //     block->size = 2;
+    //     block->entries[0] = value;
+    //     block->entries[1] = record_location;
 
-    // Key exists - add to posting list
-    off_t value = location.leaf->values[location.key_index];
+    //     location.leaf->values[location.key_index] = block_location;
+    //     update_posting_block(block_location, block);
+    //     update_node(location.leaf, location.leaf->disk_location, 4096, txn);
+    //     return;
+    // }
 
-    // First duplicate - convert single pointer to posting list
-    if(value % 4096 != 0 || value == 0)
-    {
-        off_t block_location = alloc_block();
-        init_posting_block(block_location);
+    // // Posting list exists - find block with space
+    // off_t block_location = value;
+    // Posting_Block *block = load_posting_block(block_location);
 
-        Posting_Block *block = load_posting_block(block_location);
-        block->size = 2;
-        block->entries[0] = value;
-        block->entries[1] = record_location;
+    // while(block->size == 508 && block->free_index == -1 && block->next != 0)
+    // {
+    //     block_location = block->next;
+    //     block = load_posting_block(block_location);
+    // }
 
-        location.leaf->values[location.key_index] = block_location;
-        update_posting_block(block_location, block);
-        update_node(location.leaf, location.leaf->disk_location, 4096, txn);
-        return;
-    }
+    // // Current block has space - insert via freelist or append
+    // if(block->size < 508 || block->free_index != -1)
+    // {
+    //     if(block->free_index != -1)
+    //     {
+    //         // Use freelist slot
+    //         int32_t next_free = block->entries[block->free_index];
+    //         block->entries[block->free_index] = record_location;
+    //         block->free_index = next_free;
+    //         block->size++;
+    //     }
+    //     else
+    //     {
+    //         // Append to end
+    //         block->entries[block->size] = record_location;
+    //         block->size++;
+    //     }
+    //     update_posting_block(block_location, block);
+    //     return;
+    // }
 
-    // Posting list exists - find block with space
-    off_t block_location = value;
-    Posting_Block *block = load_posting_block(block_location);
+    // // All blocks full - allocate new block
+    // off_t new_block_location = alloc_block();
+    // init_posting_block(new_block_location);
 
-    while(block->size == 509 && block->free_index == -1 && block->next != 0)
-    {
-        block_location = block->next;
-        block = load_posting_block(block_location);
-    }
+    // Posting_Block *new_block = load_posting_block(new_block_location);
+    // new_block->prev = block_location;
+    // new_block->size = 1;
+    // new_block->entries[0] = record_location;
 
-    // Current block has space - insert via freelist or append
-    if(block->size < 509 || block->free_index != -1)
-    {
-        if(block->free_index != -1)
-        {
-            // Use freelist slot
-            int32_t next_free = block->entries[block->free_index];
-            block->entries[block->free_index] = record_location;
-            block->free_index = next_free;
-            block->size++;
-        }
-        else
-        {
-            // Append to end
-            block->entries[block->size] = record_location;
-            block->size++;
-        }
-        update_posting_block(block_location, block);
-        return;
-    }
+    // block->next = new_block_location;
 
-    // All blocks full - allocate new block
-    off_t new_block_location = alloc_block();
-    init_posting_block(new_block_location);
+    // update_posting_block(block_location, block);
+    // update_posting_block(new_block_location, new_block);
 
-    Posting_Block *new_block = load_posting_block(new_block_location);
-    new_block->prev = block_location;
-    new_block->size = 1;
-    new_block->entries[0] = record_location;
-
-    block->next = new_block_location;
-
-    update_posting_block(block_location, block);
-    update_posting_block(new_block_location, new_block);
-
-    //cache->unpin_page(root);
+    // //cache->unpin_page(root);
 }
 
 
@@ -229,7 +253,7 @@ void File::build_secondary_index(Table& table, int columnIndex,
             std::string key = record.get_token(columnIndex, table);
             Type secondaryKeyType = table.columns[columnIndex].type;
 
-            //std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << std::endl;
+            //std::cout << "Inserting secondary index key: " << key << " at location: " << index_location << "\n";
             // Dispatch to the correct secondary B+Tree
             switch (secondaryKeyType) {
                 case Type::INTEGER:
@@ -280,7 +304,7 @@ void File::generate_index(int columnIndex, Table& table,
                           Transaction& txn)
 {
     table.columns[columnIndex].indexLocation = alloc_block();
-    update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation);
+    update_table_index_location(table, columnIndex, table.columns[columnIndex].indexLocation, txn);
 
     // Initialize secondary tree root
     switch (table.columns[columnIndex].type) {
@@ -360,6 +384,8 @@ off_t File::alloc_block()
         exit(1);
     }
 
+    cache.read_block(offset); // ensure block is in cache before we acquire ownership
+
     return offset;
 }
 
@@ -393,7 +419,6 @@ void File::update_root_pointer(Table* table,off_t old_location, off_t new_locati
 }
 void File::update_root_pointer(off_t old_location, off_t new_location)
 {
-
     for (auto &[t, table] : database->tableMap)
     {
         for(size_t i =0; i < table.columns.size(); i++)
@@ -404,9 +429,9 @@ void File::update_root_pointer(off_t old_location, off_t new_location)
                 return;
             }
         }
-
-        std::cerr << "Warning: Root pointer update failed, old location not found in any table\n";
     }
+
+    std::cerr << "Warning: Root pointer update failed, old location not found in any table\n";
 }
 void File::delete_from_posting_list(off_t posting_block_location, off_t record_location)
 {
@@ -511,7 +536,7 @@ void File::print_leaves(off_t disk_node_offset)
     {
         std::cout << node->keys[i] << " ";
     }
-    std::cout << std::endl;
+    std::cout << "\n";
     if (!node->is_leaf)
     {
         InternalNodeT* node_cast = static_cast<InternalNodeT*>(node);
@@ -553,28 +578,43 @@ inline std::string read_until_delim(const std::byte* buffer, int max_len, std::b
 /**
  * @brief Updates the indexLocation of a specific column in a table stored in the table block
  */
-off_t File::update_table_index_location(Table &table, int column_index, off_t new_index_value)
+off_t File::update_table_index_location(Table &table, int column_index, off_t new_index_value, Transaction& txn)
 {
-    const std::byte table_end = std::byte{0x1E};
-
     off_t current_block = table_linked_list_head;
 
     // walk the linked list of table blocks
     while (current_block != -1) {
+        // Use shared cache to navigate; only acquire private ownership on the matching block
         Page* page = cache.read_block(current_block);
+        if (page == nullptr) {
+            break;
+        }
 
-        // read next pointer
+        // read next pointer from the table-block header
         off_t next = -1;
-        std::memcpy(&next, page->buffer, sizeof(off_t));
+        std::memcpy(&next, page->buffer + kTableBlockNextOffset, sizeof(off_t));
 
-        // parse serialized table that follows the pointer
-        int offset = sizeof(off_t);
+        // parse serialized table payload after the two header pointers
+        int offset = kTableBlockPayloadOffset;
         int bytesRead = 0;
         std::string tableName = read_until_delim(reinterpret_cast<std::byte*>(page->buffer + offset),
                                                  BLOCK_SIZE - offset, std::byte{0x1F}, bytesRead);
         offset += bytesRead; // move past name + delimiter
 
         if (tableName == table.name) {
+            // Acquire private ownership now that we know this is the right block
+            txn.acquire_ownership_and_copy_if_needed(current_block);
+            page = txn.private_cache_read(current_block);
+            offset += sizeof(table.current_record_block_location);
+            if (offset < BLOCK_SIZE && static_cast<std::byte>(page->buffer[offset]) == std::byte{0x1F}) {
+                offset++;
+            }
+
+            offset += sizeof(table.row_count);
+            if (offset < BLOCK_SIZE && static_cast<std::byte>(page->buffer[offset]) == std::byte{0x1F}) {
+                offset++;
+            }
+
             // we found the correct table, now iterate columns to reach desired indexLocation
             for (int col = 0; col < static_cast<int>(table.columns.size()); ++col) {
                 // read column name
@@ -590,7 +630,7 @@ off_t File::update_table_index_location(Table &table, int column_index, off_t ne
 
                 // now offset points at 8-byte indexLocation
                 if (col == column_index) {
-                    cache.write_to_page(page, offset, &new_index_value, sizeof(off_t), current_block);
+                    txn.write_to_page(page, offset, &new_index_value, sizeof(off_t), current_block);
                     return offset;
                 }
 
@@ -611,6 +651,41 @@ off_t File::update_table_index_location(Table &table, int column_index, off_t ne
     return -1;
 }
 
+off_t File::update_table_record_block_location(Table &table, off_t new_record_block_location)
+{
+    off_t current_block = table_linked_list_head;
+
+    while (current_block != -1) {
+        Page* page = cache.read_block(current_block);
+
+        off_t next = -1;
+        std::memcpy(&next, page->buffer + kTableBlockNextOffset, sizeof(off_t));
+
+        int offset = kTableBlockPayloadOffset;
+        int bytesRead = 0;
+        std::string tableName = read_until_delim(
+            reinterpret_cast<std::byte*>(page->buffer + offset),
+            BLOCK_SIZE - offset,
+            std::byte{0x1F},
+            bytesRead);
+        offset += bytesRead;
+
+        if (tableName == table.name) {
+            cache.write_to_page(
+                page,
+                offset,
+                &new_record_block_location,
+                sizeof(off_t),
+                current_block);
+            return offset;
+        }
+
+        current_block = next;
+    }
+
+    return -1;
+}
+
 
 
 
@@ -622,9 +697,13 @@ off_t File::insert_table(Table &table, int txn_id)
     off_t new_table_location = alloc_block();
     txn.allocated_blocks.push_back(new_table_location);
 
+    cache.read_block(new_table_location); // ensure block is in cache before we acquire ownership
+
     txn.acquire_ownership_and_copy_if_needed(new_table_location);
 
     Page* new_table_page = txn.private_cache_read(new_table_location);
+
+    cache.read_block(header_pointer); // ensure header is in cache before we acquire ownership
 
     txn.acquire_ownership_and_copy_if_needed(header_pointer);
 
@@ -638,16 +717,16 @@ off_t File::insert_table(Table &table, int txn_id)
             &table_linked_list_head, sizeof(off_t), header_pointer);
 
         off_t negative_one = -1;
-        txn.write_to_page(new_table_page, 0, &new_table_location, sizeof(off_t), new_table_location);
-        txn.write_to_page(new_table_page, 8, &negative_one, 8, new_table_location);
+        txn.write_to_page(new_table_page, kTableBlockSelfOffset, &new_table_location, sizeof(off_t), new_table_location);
+        txn.write_to_page(new_table_page, kTableBlockNextOffset, &negative_one, sizeof(off_t), new_table_location);
     }
     else
     {
         //if not the first table, set new table as head of linked list and point it to old head
         off_t old_head = table_linked_list_head;
 
-        txn.write_to_page(new_table_page, 0, &new_table_location, sizeof(off_t), new_table_location);
-        txn.write_to_page(new_table_page, 8, &old_head, sizeof(off_t), new_table_location);
+        txn.write_to_page(new_table_page, kTableBlockSelfOffset, &new_table_location, sizeof(off_t), new_table_location);
+        txn.write_to_page(new_table_page, kTableBlockNextOffset, &old_head, sizeof(off_t), new_table_location);
         table_linked_list_head = new_table_location;
 
         txn.write_to_page(header_page, 8, &table_linked_list_head, sizeof(off_t), header_pointer);
@@ -691,7 +770,7 @@ off_t File::insert_table(Table &table, int txn_id)
 
     std::vector<std::byte> casted_table = cast_to_bytes(&table);
 
-    txn.write_to_page(new_table_page, 16, casted_table.data(), casted_table.size(), new_table_location);
+    txn.write_to_page(new_table_page, kTableBlockPayloadOffset, casted_table.data(), casted_table.size(), new_table_location);
 
     return 0;
 }
@@ -709,10 +788,10 @@ std::vector<Table> File::load_tables()
 
         // follow pointer stored in first 8 bytes
         off_t next = -1;
-        std::memcpy(&next, page->buffer+8, sizeof(off_t));
+        std::memcpy(&next, page->buffer + kTableBlockNextOffset, sizeof(off_t));
 
         // locate start of serialized table data immediately after the pointer
-        int offset = 16;
+        int offset = kTableBlockPayloadOffset;
 
         // compute length of the table serialization including end marker
         int tableLen = 0;
@@ -835,7 +914,7 @@ off_t File::get_table_block()   //FIX
 
 
     off_t output = 0;
-    memcpy(&output, page+8, 8);
+    memcpy(&output, page->buffer + HEADER_ROOT_DATA_LOCATION, sizeof(off_t));
 
     return output;
 }
@@ -855,7 +934,7 @@ off_t File::get_data()
 
     off_t output = 0;
 
-    //std::cout.write(reinterpret_cast<char*>(buffer),8); std::cout << std::flush;
+    //std::cout.write(reinterpret_cast<char*>(buffer),8); std::cout << "\n";
     memcpy(&output, &page->buffer[HEADER_ROOT_DATA_LOCATION], 8);
 
     return output;
@@ -921,370 +1000,352 @@ Record File::get_record(off_t record_location, const Table& table, Transaction* 
 }
 
 // @brief returns location of the new record
-off_t File::write_record(Record &record, int txn_id, Table& table)
+off_t File::write_record(Record &record, Transaction& txn, Table& table)
 {
-    //lock the header of the file
-    //latch.lock(0);
-    //free_data_pointer = cache.read_block(0)->buffer + HEADER_ROOT_DATA_LOCATION;
-    off_t data_block_location = table.current_record_block_location;
-    Transaction& txn = database->transactions.at(txn_id);
-    //latch.unlock(0);
-
-    if(data_block_location == 0)
+    while (true)
     {
-        //no data block for this table yet, need to allocate one
-        data_block_location = alloc_block();
-        table.current_record_block_location = data_block_location;
+        off_t data_block_location = table.current_record_block_location;
+
+        if (data_block_location == 0)
+        {
+            data_block_location = alloc_block();
+            txn.acquire_ownership_and_copy_if_needed(data_block_location);
+            table.current_record_block_location = data_block_location;
+            update_table_record_block_location(table, data_block_location);
+
+            init_data_node(data_block_location, txn.txn_id);
+
+            Data_Node new_data_node;
+            new_data_node.location = data_block_location;
+            new_data_node.fill_ptr = record.length;
 
 
-        init_data_node(data_block_location, txn_id);
-        Data_Node new_data_node;
-        new_data_node.location = data_block_location;
-        new_data_node.fill_ptr = record.length;
+            txn.write_to_page(
+                txn.private_cache_read(data_block_location),
+                0,
+                &new_data_node,
+                DATA_NODE_METADATA_SIZE,
+                data_block_location);
+            txn.write_to_page(
+                txn.private_cache_read(data_block_location),
+                DATA_NODE_METADATA_SIZE,
+                record.str.data(),
+                record.length,
+                data_block_location);
 
-
-        txn.acquire_ownership_and_copy_if_needed(data_block_location);
-
-        //write data node metadata
-        txn.write_to_page(txn.private_cache_read(data_block_location), 0, &new_data_node, DATA_NODE_METADATA_SIZE, data_block_location);
-
-        //write record here
-        txn.write_to_page(txn.private_cache_read(data_block_location), DATA_NODE_METADATA_SIZE, record.str.data(), record.length, data_block_location);
-
-        return data_block_location+DATA_NODE_METADATA_SIZE;
-    }
-
-
-    //get read lock on header to find current data block pointer
-    //latcher.lock(free_data_pointer);
-
-    //make a copy
-    txn.acquire_ownership_and_copy_if_needed(data_block_location);
-    Page* page = txn.private_cache_read(data_block_location);
-    Data_Node *node_copy = reinterpret_cast<Data_Node*>(page->buffer);
-
-
-
-    off_t record_location = 0;
-    int space_left = 4064 - node_copy->fill_ptr;
-
-
-
-    if(space_left > record.length)
-    {
-
-        record_location = data_block_location + (DATA_NODE_METADATA_SIZE + node_copy->fill_ptr);
-
-        memcpy(node_copy->padding + node_copy->fill_ptr, record.str.data(), record.length);
-        //cache.write_to_page(page, 24 + node->fill_ptr,record.str.data(), record.length, free_data_pointer);
-        node_copy->fill_ptr = node_copy->fill_ptr + record.length;
-        database->transactions.at(txn_id).write_to_page(page, 0,node_copy, BLOCK_SIZE, data_block_location);
-
-
-    }
-    else
-    {
-        // =====================================
-        // 1. THE CONCURRENCY RE-CHECK
-        // =====================================
-        // [Lock Shared on Header]
-        off_t actual_block_location = 0;
-        memcpy(&actual_block_location, cache.read_block(0)->buffer + HEADER_ROOT_DATA_LOCATION, sizeof(off_t));
-        // [Unlock Shared on Header]
-
-        if (actual_block_location != data_block_location) {
-            // Another thread already fixed the overflow while we were waiting!
-            // [Unlock Exclusive on data_block_location]
-
-            // Try again from the top with the new pointer
-            return write_record(record, txn_id, table);
+            return data_block_location + DATA_NODE_METADATA_SIZE;
         }
 
-        // =====================================
-        // 2. THE SAFE ALLOCATION
-        // =====================================
-
-        data_block_location = alloc_block();
-        // REMOVED: free_data_pointer = data_block_location; (No phantom pointers!)
-
-        Page* header_page = database->transactions.at(txn_id).private_cache_read(0);
-        database->transactions.at(txn_id).write_to_page(header_page, HEADER_ROOT_DATA_LOCATION, &data_block_location, sizeof(off_t), 0);
-
-        // =====================================
-        // 3. INITIALIZE & WRITE TO NEW PAGE
-        // =====================================
+        cache.read_block(data_block_location); // ensure block is in cache before we acquire ownership
         txn.acquire_ownership_and_copy_if_needed(data_block_location);
-        Page *new_page = txn.private_cache_read(data_block_location);
+        Page* page = txn.private_cache_read(data_block_location);
+        Data_Node *node_copy = reinterpret_cast<Data_Node*>(page->buffer);
 
+        int space_left = 4064 - node_copy->fill_ptr;
+        if (space_left > record.length)
+        {
+            off_t record_location = data_block_location + (DATA_NODE_METADATA_SIZE + node_copy->fill_ptr);
+            memcpy(node_copy->padding + node_copy->fill_ptr, record.str.data(), record.length);
+            node_copy->fill_ptr += record.length;
+            txn.write_to_page(page, 0, node_copy, BLOCK_SIZE, data_block_location);
+            return record_location;
+        }
+
+        if (table.current_record_block_location != data_block_location)
+        {
+            txn.try_release_ownership(data_block_location);
+            continue;
+        }
+
+off_t new_block_location = alloc_block();
+        
+        // 2. Initialize it
+        init_data_node(new_block_location, txn.txn_id);
+        
+        // 3. SECURE THE LOCK FIRST! 
+        // No one else knows this block exists yet, so this lock is instant.
+        txn.acquire_ownership_and_copy_if_needed(new_block_location);
+
+        // 4. Set up your private copy data
+        Page *new_page = txn.private_cache_read(new_block_location);
         Data_Node *node = reinterpret_cast<Data_Node*>(new_page->buffer);
-        init_data_node(data_block_location, txn_id);
+        node->location = new_block_location;
+        node->fill_ptr = 0;
+        node->next_free_block = 0;
+        node->overflow = false;
 
-        record_location = data_block_location + (DATA_NODE_METADATA_SIZE + node->fill_ptr);
+        // 5. Write the record to your private copy
+        off_t record_location = new_block_location + (DATA_NODE_METADATA_SIZE + node->fill_ptr);
         memcpy(node->padding + node->fill_ptr, record.str.data(), record.length);
         node->fill_ptr += record.length;
+        txn.write_to_page(new_page, 0, node, BLOCK_SIZE, new_block_location);
 
-        txn.write_to_page(new_page, 0, node, BLOCK_SIZE, data_block_location);
+        // 6. NOW TELL THE WORLD! 
+        // Because we already hold the lock, if Thread B sees this and tries to use it,
+        // Thread B will safely wait in line until we commit.
+        table.current_record_block_location = new_block_location;
+        update_table_record_block_location(table, new_block_location);
+
+        return record_location;
     }
-
-    return record_location;
 }
 
 //@breif updates a record at a given location and column with a new value
 int File::update_record(Record &original_record,off_t location, int column_index, std::string& value, Table* table, int txn_id)
 {
-    Transaction& txn = database->transactions.at(txn_id);
-    //first check if the column had been idnexed
-    bool indexed = (table->columns[column_index].indexLocation != -1);
+    // Transaction& txn = database->transactions.at(txn_id);
+    // //first check if the column had been idnexed
+    // bool indexed = (table->columns[column_index].indexLocation != -1);
 
 
 
-    off_t block_address = (location / BLOCK_SIZE) * BLOCK_SIZE;
+    // off_t block_address = (location / BLOCK_SIZE) * BLOCK_SIZE;
 
-    Page* page = cache.read_block(block_address);
-
-
-    switch (table->columns[column_index].type)
-    {
-        case Type::INTEGER:
-        {
-            if(indexed)
-            {
-                uint32_t old_value = std::stoi(original_record.get_token(column_index, *table));
-                uint32_t big_endian_old = htonl(old_value);
-                std::string old_key(reinterpret_cast<const char*>(&big_endian_old), 4);
-
-                uint32_t new_value = std::stoi(value);
-                uint32_t big_endian_new = htonl(new_value);
-                std::string new_key(reinterpret_cast<const char*>(&big_endian_new), 4);
-
-                database->index_tree4.table = table;
-
-                //delete old key
-                if (database->index_tree4.delete_key(old_key, location, table->columns[column_index].indexLocation, txn) != 0) {
-                    return -1;
-                }
-
-                //insert new key
-                database->index_tree4.insert(new_key, location, table->columns[column_index].indexLocation, txn);
-            }
+    // Page* page = cache.read_block(block_address);
 
 
-            int32_t big_endian_new = std::stoi(value);
-            big_endian_new = htonl(big_endian_new);
-            original_record.update_column(column_index, value, *table);
-            value.append(reinterpret_cast<const char*>(&big_endian_new), sizeof(big_endian_new));
+    // switch (table->columns[column_index].type)
+    // {
+    //     case Type::INTEGER:
+    //     {
+    //         if(indexed)
+    //         {
+    //             uint32_t old_value = std::stoi(original_record.get_token(column_index, *table));
+    //             uint32_t big_endian_old = htonl(old_value);
+    //             std::string old_key(reinterpret_cast<const char*>(&big_endian_old), 4);
+
+    //             uint32_t new_value = std::stoi(value);
+    //             uint32_t big_endian_new = htonl(new_value);
+    //             std::string new_key(reinterpret_cast<const char*>(&big_endian_new), 4);
+
+    //             database->index_tree4.table = table;
+
+    //             //delete old key
+    //             if (database->index_tree4.delete_key(old_key, location, table->columns[column_index], txn) != 0) {
+    //                 return -1;
+    //             }
+
+    //             //insert new key
+    //             database->index_tree4.insert(new_key, location, table->columns[column_index], txn);
+    //         }
 
 
-            //write in line, as the record size is not changing
-            cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
-            break;
-        }
-        case Type::CHAR32:
-        case Type::CHAR16:
-        case Type::CHAR8:
-            delete_record(original_record, location, *table, txn_id);
-            strip_quotes(value);
-
-            original_record.update_column(column_index, value, *table);
-
-            database->insert(table->name, original_record.to_tokens(*table), txn_id);
-            break;
-
-    }
+    //         int32_t big_endian_new = std::stoi(value);
+    //         big_endian_new = htonl(big_endian_new);
+    //         original_record.update_column(column_index, value, *table);
+    //         value.append(reinterpret_cast<const char*>(&big_endian_new), sizeof(big_endian_new));
 
 
+    //         //write in line, as the record size is not changing
+    //         cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
+    //         break;
+    //     }
+    //     case Type::CHAR32:
+    //     case Type::CHAR16:
+    //     case Type::CHAR8:
+    //         delete_record(original_record, location, *table, txn_id);
+    //         strip_quotes(value);
+
+    //         original_record.update_column(column_index, value, *table);
+
+    //         //database->insert(table->name, original_record.to_tokens(*table), txn_id);
+    //         break;
+
+    // }
 
 
 
 
 
-    return location;
+
+
+    // return location;
 }
 
 int File::delete_record(const Record &record, off_t location, const Table& table, int txn_id)
 {
     //first we clear out the secondary keys it may have
 
-    Transaction& txn = database->transactions.at(txn_id);
+    // Transaction& txn = database->transactions.at(txn_id);
 
-    int column_index = 0;
-    for (auto& index : table.columns)
-    {
-        if (index.indexLocation != -1)
-        {
-            off_t block_address = (index.indexLocation/ BLOCK_SIZE) * BLOCK_SIZE;
+    // int column_index = 0;
+    // for (auto& index : table.columns)
+    // {
+    //     if (index.indexLocation != -1)
+    //     {
+    //         off_t block_address = (index.indexLocation/ BLOCK_SIZE) * BLOCK_SIZE;
 
-            std::string key = record.get_token(column_index, table);
-            bool is_primary_column = (column_index == 0);
-            off_t root_location;
+    //         std::string key = record.get_token(column_index, table);
+    //         bool is_primary_column = (column_index == 0);
+    //         off_t root_location;
 
-            switch (index.type)
-            {
-                case Type::INTEGER:
-                {
-                    int v = stoi(key);
-                    v = ntohl(v);
-                    std::string key(reinterpret_cast<const char*>(&v), 4);
+    //         switch (index.type)
+    //         {
+    //             case Type::INTEGER:
+    //             {
+    //                 int v = stoi(key);
+    //                 v = ntohl(v);
+    //                 std::string key(reinterpret_cast<const char*>(&v), 4);
 
 
-                    database->index_tree4.table = &const_cast<Table&>(table);
-                    root_location = table.columns[column_index].indexLocation;
+    //                 database->index_tree4.table = &const_cast<Table&>(table);
+    //                 root_location = table.columns[column_index].indexLocation;
 
-                    if(is_primary_column)
-                    {
-                        assert(key.size() == 4);
-                        if (database->index_tree4.
-                            delete_key(key, location, root_location, txn) != 0) {
-                            return -1;
-                        }
-                    }
-                    else
-                    {
-                        off_t posting_list_root = database->index_tree4.locate_exact(key, root_location, txn).leaf->values[database->index_tree4.locate_exact(key, root_location, txn).key_index];
-                        Posting_Block *block = load_posting_block(posting_list_root);
-                        delete_from_posting_list(posting_list_root, location);
+    //                 if(is_primary_column)
+    //                 {
+    //                     assert(key.size() == 4);
+    //                     if (database->index_tree4.
+    //                         delete_key(key, location, root_location, txn) != 0) {
+    //                         return -1;
+    //                     }
+    //                 }
+    //                 else
+    //                 {
+    //                     off_t posting_list_root = database->index_tree4.locate_exact(key, root_location, txn).leaf->values[database->index_tree4.locate_exact(key, root_location, txn).key_index];
+    //                     Posting_Block *block = load_posting_block(posting_list_root);
+    //                     delete_from_posting_list(posting_list_root, location);
 
-                        if(block->size == 0)
-                        {
-                            if(block->next != 0)
-                            {
-                                database->index_tree4.update_value(key, block->next, root_location, txn);
-                                break;
-                            }
-                            else
-                            {
-                                database->index_tree4.delete_key(key, location, root_location, txn);
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-                case Type::CHAR32:
+    //                     if(block->size == 0)
+    //                     {
+    //                         if(block->next != 0)
+    //                         {
+    //                             database->index_tree4.update_value(key, block->next, root_location, txn);
+    //                             break;
+    //                         }
+    //                         else
+    //                         {
+    //                             database->index_tree4.delete_key(key, location, root_location, txn);
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
+    //                 break;
+    //             }
+    //             case Type::CHAR32:
 
-                    database->index_tree32.table = &const_cast<Table&>(table);
-                    root_location = table.columns[column_index].indexLocation;
+    //                 database->index_tree32.table = &const_cast<Table&>(table);
+    //                 root_location = table.columns[column_index].indexLocation;
 
-                    if(is_primary_column)
-                    {
-                        assert(key.size() <= 32);
-                        if (database->index_tree32.delete_key(key, location, root_location, txn) != 0) {
-                            return -1;
-                        }
-                    }
-                    else
-                    {
-                        off_t posting_list_root = database->index_tree32.locate_exact(key, root_location, txn).leaf->values[database->index_tree32.locate_exact(key, root_location, txn).key_index];
-                        if(posting_list_root % 4096 != 0)
-                        {
-                            database->index_tree32.delete_key(key, location, root_location, txn);
-                            break;
-                        }
+    //                 if(is_primary_column)
+    //                 {
+    //                     assert(key.size() <= 32);
+    //                     if (database->index_tree32.delete_key(key, location, root_location, txn) != 0) {
+    //                         return -1;
+    //                     }
+    //                 }
+    //                 else
+    //                 {
+    //                     off_t posting_list_root = database->index_tree32.locate_exact(key, root_location, txn).leaf->values[database->index_tree32.locate_exact(key, root_location, txn).key_index];
+    //                     if(posting_list_root % 4096 != 0)
+    //                     {
+    //                         database->index_tree32.delete_key(key, location, root_location, txn);
+    //                         break;
+    //                     }
 
-                        Posting_Block *block = load_posting_block(posting_list_root);
-                        delete_from_posting_list(posting_list_root, location);
+    //                     Posting_Block *block = load_posting_block(posting_list_root);
+    //                     delete_from_posting_list(posting_list_root, location);
 
-                        if(block->size == 0)
-                        {
-                            if(block->next != 0)
-                            {
-                                database->index_tree32.update_value(key, block->next, root_location, txn);
-                                break;
-                            }
-                            else
-                            {
-                                database->index_tree32.delete_key(key, location, root_location, txn);
-                                break;
-                            }
-                        }
-                    }
-                    break;
+    //                     if(block->size == 0)
+    //                     {
+    //                         if(block->next != 0)
+    //                         {
+    //                             database->index_tree32.update_value(key, block->next, root_location, txn);
+    //                             break;
+    //                         }
+    //                         else
+    //                         {
+    //                             database->index_tree32.delete_key(key, location, root_location, txn);
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
+    //                 break;
 
-                case Type::CHAR16:
-                    root_location = table.columns[column_index].indexLocation;
-                    database->index_tree16.table = &const_cast<Table&>(table);
+    //             case Type::CHAR16:
+    //                 root_location = table.columns[column_index].indexLocation;
+    //                 database->index_tree16.table = &const_cast<Table&>(table);
 
-                    if(is_primary_column)
-                    {
-                        assert(key.size() <= 16);
-                        if (database->index_tree16.delete_key(key, location, root_location, txn) != 0) {
-                            return -1;
-                        }
-                    }
-                    else
-                    {
-                        off_t posting_list_root = database->index_tree16.locate_exact(key, root_location, txn).leaf->values[database->index_tree16.locate_exact(key, root_location, txn).key_index];
-                        if(posting_list_root % 4096 != 0)
-                        {
-                            database->index_tree16.delete_key(key, location, root_location, txn);
-                            break;
-                        }
+    //                 if(is_primary_column)
+    //                 {
+    //                     assert(key.size() <= 16);
+    //                     if (database->index_tree16.delete_key(key, location, root_location, txn) != 0) {
+    //                         return -1;
+    //                     }
+    //                 }
+    //                 else
+    //                 {
+    //                     off_t posting_list_root = database->index_tree16.locate_exact(key, root_location, txn).leaf->values[database->index_tree16.locate_exact(key, root_location, txn).key_index];
+    //                     if(posting_list_root % 4096 != 0)
+    //                     {
+    //                         database->index_tree16.delete_key(key, location, root_location, txn);
+    //                         break;
+    //                     }
 
-                        Posting_Block *block = load_posting_block(posting_list_root);
-                        delete_from_posting_list(posting_list_root, location);
+    //                     Posting_Block *block = load_posting_block(posting_list_root);
+    //                     delete_from_posting_list(posting_list_root, location);
 
-                        if(block->size == 0)
-                        {
-                            if(block->next != 0)
-                            {
-                                database->index_tree16.update_value(key, block->next, root_location, txn);
-                                break;
-                            }
-                            else
-                            {
-                                database->index_tree16.delete_key(key, location, root_location, txn);
-                                break;
-                            }
-                        }
-                    }
-                    break;
+    //                     if(block->size == 0)
+    //                     {
+    //                         if(block->next != 0)
+    //                         {
+    //                             database->index_tree16.update_value(key, block->next, root_location, txn);
+    //                             break;
+    //                         }
+    //                         else
+    //                         {
+    //                             database->index_tree16.delete_key(key, location, root_location, txn);
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
+    //                 break;
 
-                case Type::CHAR8:
-                    root_location = table.columns[column_index].indexLocation;
-                    database->index_tree8.table = &const_cast<Table&>(table);
+    //             case Type::CHAR8:
+    //                 root_location = table.columns[column_index].indexLocation;
+    //                 database->index_tree8.table = &const_cast<Table&>(table);
 
-                    if(is_primary_column)
-                    {
-                        assert(key.size() <= 8);
-                        if (database->index_tree8.delete_key(key, location, root_location, txn) != 0) {
-                            return -1;
-                        }
-                    }
-                    else
-                    {
-                        off_t posting_list_root = database->index_tree8.locate_exact(key, root_location, txn).leaf->values[database->index_tree8.locate_exact(key, root_location, txn).key_index];
-                        if(posting_list_root % 4096 != 0)
-                        {
-                            database->index_tree8.delete_key(key, location, root_location, txn);
-                            break;
-                        }
+    //                 if(is_primary_column)
+    //                 {
+    //                     assert(key.size() <= 8);
+    //                     if (database->index_tree8.delete_key(key, location, root_location, txn) != 0) {
+    //                         return -1;
+    //                     }
+    //                 }
+    //                 else
+    //                 {
+    //                     off_t posting_list_root = database->index_tree8.locate_exact(key, root_location, txn).leaf->values[database->index_tree8.locate_exact(key, root_location, txn).key_index];
+    //                     if(posting_list_root % 4096 != 0)
+    //                     {
+    //                         database->index_tree8.delete_key(key, location, root_location, txn);
+    //                         break;
+    //                     }
 
-                        Posting_Block *block = load_posting_block(posting_list_root);
-                        delete_from_posting_list(posting_list_root, location);
+    //                     Posting_Block *block = load_posting_block(posting_list_root);
+    //                     delete_from_posting_list(posting_list_root, location);
 
-                        if(block->size == 0)
-                        {
-                            if(block->next != 0)
-                            {
-                                database->index_tree8.update_value(key, block->next, root_location, txn);
-                                break;
-                            }
-                            else
-                            {
-                                database->index_tree8.delete_key(key, location, root_location, txn);
-                                break;
-                            }
-                        }
-                    }
-                    break;
+    //                     if(block->size == 0)
+    //                     {
+    //                         if(block->next != 0)
+    //                         {
+    //                             database->index_tree8.update_value(key, block->next, root_location, txn);
+    //                             break;
+    //                         }
+    //                         else
+    //                         {
+    //                             database->index_tree8.delete_key(key, location, root_location, txn);
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
+    //                 break;
 
-                default:
-                    throw std::runtime_error("Unsupported column type");
-            }
-        }
+    //             default:
+    //                 throw std::runtime_error("Unsupported column type");
+    //         }
+    //     }
 
-        column_index++;
-    }
+    //     column_index++;
+    // }
 
     return 0;
 }
@@ -1314,7 +1375,7 @@ template Node4* File::load_node<Node4>(off_t, Transaction&);
 template void File::update_node<Node4>(Node4*, off_t, size_t, Transaction&);
 template void File::update_node<InternalNode4>(InternalNode4*, off_t, size_t, Transaction&);
 
-template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&,Table&, int);
+template off_t File::insert_primary_index<MyBtree4>(std::string,Record&, MyBtree4&,Table&, Transaction&);
 template void File::insert_secondary_index<MyBtree4>(std::string,Table&, MyBtree4&, off_t, int, int);
 //template void File::parse_primary_tree<MyBtree4>(MyBtree4&);
 
@@ -1325,7 +1386,7 @@ template Node8* File::load_node<Node8>(off_t, Transaction&);
 template void File::update_node<Node8>(Node8*, off_t, size_t, Transaction&);
 template void File::update_node<InternalNode8>(InternalNode8*, off_t, size_t, Transaction&);
 
-template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&,Table&, int);
+template off_t File::insert_primary_index<MyBtree8>(std::string,Record&, MyBtree8&,Table&, Transaction&);
 template void File::insert_secondary_index<MyBtree8>(std::string,Table&, MyBtree8&, off_t, int, int);
 //template void File::parse_primary_tree<MyBtree8>(MyBtree8&);
 
@@ -1335,7 +1396,7 @@ template void File::update_node<InternalNode16>(InternalNode16*, off_t, size_t, 
 
 
 
-template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&,Table&,int);
+template off_t File::insert_primary_index<MyBtree16>(std::string,Record&, MyBtree16&,Table&, Transaction&);
 template void File::insert_secondary_index<MyBtree16>(std::string,Table&, MyBtree16&, off_t, int, int);
 //template void File::parse_primary_tree<MyBtree16>(MyBtree16&);
 
@@ -1344,7 +1405,7 @@ template Node32* File::load_node<Node32>(off_t, Transaction&);
 template void File::update_node<Node32>(Node32*, off_t, size_t, Transaction&);
 template void File::update_node<InternalNode32>(InternalNode32*, off_t, size_t, Transaction&);
 
-template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&,Table&, int);
+template off_t File::insert_primary_index<MyBtree32>(std::string,Record&, MyBtree32&,Table&, Transaction&);
 template void File::insert_secondary_index<MyBtree32>(std::string,Table&, MyBtree32&, off_t, int, int);
 //template void File::parse_primary_tree<MyBtree32>(MyBtree32&);
 

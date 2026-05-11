@@ -39,7 +39,7 @@ struct Packet {
     
 };
 
-// --- Metadata payload (status = METADATA, flag = LAST_PACKET) ---
+// --- Metadata payload (status = METADATA, flag = MORE_PACKETS | LAST_PACKET) ---
 // Wire layout of payload:
 //   4 bytes table_count
 //   for each table:

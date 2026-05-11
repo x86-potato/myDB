@@ -11,6 +11,7 @@ class Operator;
 class Filter;
 class Scan;
 class Join;
+class Session;
 
 class Pipeline
 {
@@ -19,7 +20,7 @@ public:
 
     void ExecuteDelete();
     void ExecuteUpdate(std::vector<AST::UpdateArg> &update_args);
-    void Execute();
+    void Execute(Session* session = nullptr);
 
 
     std::unique_ptr<Operator> root;

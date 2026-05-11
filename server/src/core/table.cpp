@@ -166,11 +166,11 @@ Table::Table(std::byte* data, int len)
 
 void Table::table_print()
 {
-    std::cout << "\ntable name: " << name << std::endl;
-    std::cout << "current record block location: " << current_record_block_location << std::endl;
-    std::cout << "row count: " << row_count << std::endl;
+    std::cout << "\ntable name: " << name << "\n";
+    std::cout << "current record block location: " << current_record_block_location << "\n";
+    std::cout << "row count: " << row_count << "\n";
     for (const auto &i : columns) {
-        std::cout << "column: " << i.name << " " << TypeUtil::type_to_string(i.type) << i.indexLocation << std::endl;
+        std::cout << "column: " << i.name << " " << TypeUtil::type_to_string(i.type) << i.indexLocation << "\n";
     }
 }
 

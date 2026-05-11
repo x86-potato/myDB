@@ -22,6 +22,9 @@ void Cache::clear()
     lru.allocated_count = 0;
     lru.head = nullptr;
     lru.tail = nullptr;
+
+    std::lock_guard<std::mutex> lg(dirty_list_mutex);
+    dirty_page_list.clear();
 }
 
 int Cache::write_block(off_t block_off)
@@ -121,10 +124,14 @@ void Cache::write_to_page(Page* page, size_t offset, const void* src, size_t len
     assert(offset + len <= BLOCK_SIZE);
     memcpy(page->buffer + offset, src, len);
 
-    //write_block(block_offset);
-    
     NodeLRU* node = lru.page_to_node[block_offset];
+    assert(node);
     if (node) node->dirty = true;
+
+    {
+        std::lock_guard<std::mutex> lg(dirty_list_mutex);
+        dirty_page_list.insert(block_offset);
+    }
 }
 
 void Cache::WAL()
@@ -134,8 +141,19 @@ void Cache::WAL()
 
 void Cache::flush_cache()
 {
-    std::cout << "\nhits:" << cache_hit_counter << " misses: " << cache_miss_counter; 
-    lru.flush_all();
+    //std::cout << "\nhits:" << cache_hit_counter << " misses: " << cache_miss_counter;
+
+    std::unordered_set<off_t> to_flush;
+    {
+        std::lock_guard<std::mutex> lg(dirty_list_mutex);
+        to_flush.swap(dirty_page_list);
+    }
+
+    for (off_t offset : to_flush) {
+        write_block(offset);
+        NodeLRU* node = lru.page_to_node[offset];
+        if (node) node->dirty = false;
+    }
 }
 
 std::byte* Cache::pre_allocate(size_t bytes)
@@ -219,6 +237,7 @@ void LRU::flush_all() {
     for (auto& node : nodes) {
         if (node.page_ptr && node.dirty) {
             cache->write_block(node.block_ptr);
+            node.dirty = false;
         }
     }
 }

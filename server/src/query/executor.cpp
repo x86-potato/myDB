@@ -37,7 +37,7 @@ void Executor::execute (const std::string &input, Session& session)
             case AST::QueryType::Begin:
             case AST::QueryType::Commit:
             case AST::QueryType::Rollback:
-                std::cout << "Error: Query type not allowed in admin CLI." << std::endl;
+                std::cout << "Error: Query type not allowed in admin CLI." << "\n";
                 return;
         }
     }
@@ -129,7 +129,7 @@ void Executor::execute (const std::string &input, Session& session)
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    std::cout << "\nExecution time: " << elapsed.count() << " us for Session: "<< session.session_id  <<"\n";
+   // std::cout << "\nExecution time: " << elapsed.count() << " us for Session: "<< session.session_id  <<"\n";
 }
 
 void Executor::execute_show(AST::ShowQuery* query) {
@@ -176,11 +176,11 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
     //should not happen due to prior validation
     if (columnIndex == -1)
     {
-        std::cout << "Column " << query->column << " not found in table " << query->tableName << std::endl;
+        std::cout << "Column " << query->column << " not found in table " << query->tableName << "\n";
         return;
     }
 
-    std::cout << "Generating index for column " << query->column << " in table " << query->tableName << std::endl;
+    std::cout << "Generating index for column " << query->column << " in table " << query->tableName << "\n";
 
 
     database.file->generate_index<MyBtree32, MyBtree16, MyBtree8, MyBtree4>(columnIndex, table,
@@ -197,7 +197,12 @@ void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
 
     Plan plan(query->tableName, query->condition);
 
-    Transaction& txn = database.transactions.at(session.current_transaction_id);
+    Transaction* txn_ptr;
+    {
+        std::lock_guard<std::mutex> lock(database.txn_mutex);
+        txn_ptr = &database.transactions.at(session.current_transaction_id);
+    }
+    Transaction& txn = *txn_ptr;
 
     if(plan.paths.size() == 0)
     {
@@ -216,7 +221,12 @@ void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
 
 void Executor::execute_select(AST::SelectQuery* query, Session& session) {
     //AST::print_select_query_tree(*query);
-    Transaction& txn = database.transactions.at(session.current_transaction_id);
+    Transaction* txn_ptr;
+    {
+        std::lock_guard<std::mutex> lock(database.txn_mutex);
+        txn_ptr = &database.transactions.at(session.current_transaction_id);
+    }
+    Transaction& txn = *txn_ptr;
 
     Plan plan(*query);
     if (validatePlan(plan, database) == false)
@@ -230,16 +240,14 @@ void Executor::execute_select(AST::SelectQuery* query, Session& session) {
         Path temp = Path{};
         Pipeline plan_executor(temp, database, &txn);
 
-        plan_executor.Execute();
+        plan_executor.Execute(&session);
     }
     else
     {
         Pipeline plan_executor(plan.paths[0], database, &txn);
 
-        plan_executor.Execute();
+        plan_executor.Execute(&session);
     }
-
-    session.send_ok();
 }
 
 void Executor::execute_load(AST::LoadQuery* query, Session& session) {
@@ -252,7 +260,7 @@ void Executor::execute_load(AST::LoadQuery* query, Session& session) {
     // Open the CSV file
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << filename  << std::endl;
+        std::cerr << "Error: Could not open file " << filename  << "\n";
         return;
     }
 
@@ -296,7 +304,7 @@ void Executor::execute_load(AST::LoadQuery* query, Session& session) {
 
     file.close();
     std::cout << "Successfully loaded " << successCount << " rows into table "
-              << query->tableName << std::endl;
+              << query->tableName << "\n";
 }
 
 void Executor::execute_create_table(AST::CreateTableQuery* query, Session& session) {
@@ -333,7 +341,7 @@ void Executor::execute_insert(AST::InsertQuery* query, Session& session) {
     int txn_id = session.current_transaction_id;
     if(txn_id == -1)
     {
-        std::cout << "Error: No active transaction for insert operation." << std::endl;
+        std::cout << "Error: No active transaction for insert operation." << "\n";
         return;
     }
 
@@ -352,12 +360,16 @@ void Executor::execute_insert(AST::InsertQuery* query, Session& session) {
 
     std::string tableName = query->tableName;
 
-    int result = database.insert(tableName, values, txn_id);
+    std::string error_message;
+    int result = database.insert(tableName, values, txn_id, &error_message);
 
     if(result != 0)
     {
-        std::cout << "Error: Insert operation failed for table " << tableName << std::endl;
-        std::cout << "Transaction has been rolled back." << std::endl;
+        if (error_message.empty()) {
+            error_message = "Insert failed for table " + tableName;
+        }
+
+        session.send_error(error_message);
         return;
     }
 
@@ -374,7 +386,11 @@ void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
     {
        return;
     }
-    Transaction* txn = &database.transactions.at(session.current_transaction_id);
+    Transaction* txn;
+    {
+        std::lock_guard<std::mutex> lock(database.txn_mutex);
+        txn = &database.transactions.at(session.current_transaction_id);
+    }
 
     const std::string &tableName = query->tableName;
     database.erase(tableName, plan, txn);
@@ -389,7 +405,7 @@ void Executor::execute_run(AST::RunQuery* query, Session& session) {
 
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cout << "Error: Could not open file " << filename  << std::endl;
+        std::cout << "Error: Could not open file " << filename  << "\n";
         return;
     }
 
@@ -422,13 +438,13 @@ void Executor::execute_switch(AST::SwitchQuery* query, Session& session) {
     int session_id_int = stoi(query->session_id);
     // For demonstration, we'll just print the session switch action.
     // In a real implementation, this would involve more complex session management logic.
-    std::cout << "Switching to session: " << session_id_int << std::endl;
+    std::cout << "Switching to session: " << session_id_int << "\n";
 
 }
 
 void Executor::execute_begin(AST::BeginQuery* query, Session& session) {
     int txn_id = database.create_transaction();
-    std::cout << "Transaction " << txn_id << " started." << std::endl;
+    std::cout << "Transaction " << txn_id << " started." << "\n";
 
     session.set_current_txn(txn_id);    
 
@@ -441,7 +457,7 @@ void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
 
     if(txn_id == -1)
     {
-        std::cout << "Error: No active transaction to commit." << std::endl;
+        std::cout << "Error: No active transaction to commit." << "\n";
         return;
     }
 
@@ -449,11 +465,12 @@ void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
 
     if(result != 0)
     {
-        std::cout << "Error: Commit operation failed for transaction " << txn_id << std::endl;
+        std::cout << "Error: Commit operation failed for transaction " << txn_id << "\n";
         return;
     }
 
-    std::cout << "Transaction " << txn_id << " committed successfully." << std::endl;
+
+    //std::cout << "Transaction " << txn_id << " committed successfully." << "\n";
     session.set_current_txn(-1);
 
     session.send_ok();

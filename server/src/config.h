@@ -6,8 +6,10 @@
 
 //wal stuff
 const std::string WAL_LOG_FILE_NAME = "wal.log";
-constexpr int WAL_PAGE_LIMIT = 100;
-constexpr int WAL_FILE_SIZE = 4096 + WAL_PAGE_LIMIT * 4096; // in bytes
+
+
+//server stuff
+constexpr int MAX_SESSIONS = 1000;
 
 
 constexpr int CACHE_PAGE_LIMIT = 300000;

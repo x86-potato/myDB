@@ -196,7 +196,7 @@ void File::update_node(Node *node, off_t node_location)
     }
 
 
-    std::cout << std::flush;
+    std::cout << "\n";
 }
 
 Node* File::load_node(off_t disk_offset) {
@@ -303,7 +303,7 @@ void File::print_leaves(off_t disk_node_offset) {
     {
         std::cout << node->keys[i] << " ";
     }
-    std::cout << std::endl;
+    std::cout << "\n";
     if (!node->is_leaf)    
     {
         internal_node* node_cast = static_cast<internal_node*>(node);
