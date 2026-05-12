@@ -10,22 +10,26 @@ Token Lexer::classify_token(const std::string& text)
     if (text.empty())
         return {text, TokenType::IDENTIFIER};
 
-    // boolean literals
-    if (text == "true" || text == "false")
-        return {text, TokenType::BOOL_LITERAL};
-
     // numeric literal
     bool all_digits = true;
     for (char c : text)
         if (!std::isdigit(c)) { all_digits = false; break; }
-
     if (all_digits)
         return {text, TokenType::LITERAL};
 
-    // keywords / operators table
-    TokenType t = StringToTokenType(text);
+    // case-insensitive keyword / bool-literal lookup
+    std::string lower = text;
+    for (char& c : lower) c = static_cast<char>(std::tolower(c));
 
-    return {text, t};
+    if (lower == "true" || lower == "false")
+        return {lower, TokenType::BOOL_LITERAL};
+
+    TokenType t = StringToTokenType(lower);
+    if (t != TokenType::IDENTIFIER)
+        return {lower, t};  // keyword — store lowercased
+
+    // not a keyword — preserve original case (table / column identifiers)
+    return {text, TokenType::IDENTIFIER};
 }
 
 

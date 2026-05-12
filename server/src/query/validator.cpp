@@ -75,56 +75,63 @@ bool checkIfTableContainsColumn(const Table& table, const std::string& columnNam
     return false;
 }
 
-bool validateLiteralSelectionPredicate(const Predicate& predicate, const Database &db)
+bool validateLiteralSelectionPredicate(const Predicate& predicate, const Database &db, std::string* out_error)
 {
     //case where users.id == literal
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
     if (db.tableMap.find(left_table) == db.tableMap.end())
     {
-        std::string output = std::string("Table " + left_table + " does not exist!");
+        std::string output = "Table " + left_table + " does not exist!";
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
     {
-        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        std::string output = "Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
 
     return true;
 }
-bool validateColumnSelectionPredicate(const Predicate& predicate, const Database &db)
+bool validateColumnSelectionPredicate(const Predicate& predicate, const Database &db, std::string* out_error)
 {
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
     if (db.tableMap.find(left_table) == db.tableMap.end())
     {
-        std::string output = std::string("Table " + left_table + " does not exist!");
+        std::string output = "Table " + left_table + " does not exist!";
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     auto right_table = std::get<ColumnOperand>(predicate.right).table;
     if (db.tableMap.find(right_table) == db.tableMap.end())
     {
-        std::string output = std::string("Table " + right_table + " does not exist!");
+        std::string output = "Table " + right_table + " does not exist!";
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     if (left_table != right_table)
     {
-        std::string output = std::string("In multi-table filter, both columns cannot be from the same table " + left_table);
+        std::string output = "In multi-table filter, both columns cannot be from the same table " + left_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
     {
-        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        std::string output = "Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     if (!checkIfTableContainsColumn(db.tableMap.at(right_table), std::get<ColumnOperand>(predicate.right).column))
     {
-        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table);
+        std::string output = "Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
@@ -132,38 +139,43 @@ bool validateColumnSelectionPredicate(const Predicate& predicate, const Database
     return true;
 }
 
-bool validateJoinPredicate(const Predicate& predicate, const Database &db)
+bool validateJoinPredicate(const Predicate& predicate, const Database &db, std::string* out_error)
 {
     auto left_table = std::get<ColumnOperand>(predicate.left).table;
     if (db.tableMap.find(left_table) == db.tableMap.end())
     {
-        std::string output = std::string("Table " + left_table + " does not exist!");
+        std::string output = "Table " + left_table + " does not exist!";
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     auto right_table = std::get<ColumnOperand>(predicate.right).table;
     if (db.tableMap.find(right_table) == db.tableMap.end())
     {
-        std::string output = std::string("Table " + right_table + " does not exist!");
+        std::string output = "Table " + right_table + " does not exist!";
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
 
     if (left_table == right_table)
     {
-        std::string output = std::string("In join predicate, both columns cannot be from the same table " + left_table);
+        std::string output = "In join predicate, both columns cannot be from the same table " + left_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
-        if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
+    if (!checkIfTableContainsColumn(db.tableMap.at(left_table), std::get<ColumnOperand>(predicate.left).column))
     {
-        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table);
+        std::string output = "Column " + std::get<ColumnOperand>(predicate.left).column + " does not exist in table " + left_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
     if (!checkIfTableContainsColumn(db.tableMap.at(right_table), std::get<ColumnOperand>(predicate.right).column))
     {
-        std::string output = std::string("Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table);
+        std::string output = "Column " + std::get<ColumnOperand>(predicate.right).column + " does not exist in table " + right_table;
+        if (out_error) *out_error = output;
         throwError(output.c_str());
         return false;
     }
@@ -173,8 +185,109 @@ bool validateJoinPredicate(const Predicate& predicate, const Database &db)
 
 
 
+bool validateSelectQuery(const AST::SelectQuery &query, const Database &db, std::string* out_error)
+{
+    // 1. All table names must exist
+    for (const auto& table_name : query.tableNames)
+    {
+        if (db.tableMap.find(table_name) == db.tableMap.end())
+        {
+            std::string msg = "Table '" + table_name + "' does not exist";
+            if (out_error) *out_error = msg;
+            throwError(msg.c_str());
+            return false;
+        }
+    }
+
+    // 2. Column list / aggregate column validation
+    if (!query.select_all && query.aggregate == AST::AggregateType::NONE)
+    {
+        if (query.selected_columns.empty())
+        {
+            std::string msg = "SELECT has no columns and is not SELECT *";
+            if (out_error) *out_error = msg;
+            throwError(msg.c_str());
+            return false;
+        }
+        for (const auto& sc : query.selected_columns)
+        {
+            std::string tname = sc.table.empty() ? query.tableNames[0] : sc.table;
+
+            // table referenced in column must be in the FROM list
+            bool in_from = false;
+            for (const auto& t : query.tableNames)
+                if (t == tname) { in_from = true; break; }
+            if (!in_from)
+            {
+                std::string msg = "Table '" + tname + "' referenced in column list is not in FROM clause";
+                if (out_error) *out_error = msg;
+                throwError(msg.c_str());
+                return false;
+            }
+
+            if (!checkIfTableContainsColumn(db.tableMap.at(tname), sc.column))
+            {
+                std::string msg = "Column '" + sc.column + "' does not exist in table '" + tname + "'";
+                if (out_error) *out_error = msg;
+                throwError(msg.c_str());
+                return false;
+            }
+        }
+    }
+    else if (query.aggregate == AST::AggregateType::SUM ||
+             query.aggregate == AST::AggregateType::MAX ||
+             query.aggregate == AST::AggregateType::MIN)
+    {
+        const auto& sc = query.aggregate_column;
+        std::string tname = sc.table.empty() ? query.tableNames[0] : sc.table;
+
+        bool in_from = false;
+        for (const auto& t : query.tableNames)
+            if (t == tname) { in_from = true; break; }
+        if (!in_from)
+        {
+            std::string msg = "Table '" + tname + "' in aggregate is not in FROM clause";
+            if (out_error) *out_error = msg;
+            throwError(msg.c_str());
+            return false;
+        }
+
+        const Table& tbl = db.tableMap.at(tname);
+        if (!checkIfTableContainsColumn(tbl, sc.column))
+        {
+            std::string msg = "Column '" + sc.column + "' does not exist in table '" + tname + "'";
+            if (out_error) *out_error = msg;
+            throwError(msg.c_str());
+            return false;
+        }
+
+        // SUM/MAX/MIN require an INTEGER column
+        for (const auto& col : tbl.columns)
+        {
+            if (col.name == sc.column && col.type != Type::INTEGER)
+            {
+                std::string msg = "SUM/MAX/MIN require an INTEGER column, '" + sc.column + "' is not";
+                if (out_error) *out_error = msg;
+                throwError(msg.c_str());
+                return false;
+            }
+        }
+    }
+
+    // 3. LIMIT must be positive when set
+    if (query.limit == 0 || query.limit < -1)
+    {
+        std::string msg = "LIMIT value must be a positive integer";
+        if (out_error) *out_error = msg;
+        throwError(msg.c_str());
+        return false;
+    }
+
+    return true;
+}
+
 //first we only
-bool validatePlan(const Plan& plan, const Database &db)
+bool validatePlan(const Plan& plan, const Database &db, std::string* out_error)
 {
     for (auto &path: plan.paths)
     {
@@ -186,15 +299,15 @@ bool validatePlan(const Plan& plan, const Database &db)
             switch (predicate.predicate_kind)
             {
                 case Predicate::PredicateKind::LiteralSelection:
-                    if (!validateLiteralSelectionPredicate(predicate, db))
+                    if (!validateLiteralSelectionPredicate(predicate, db, out_error))
                         return false;
                     break;
                 case Predicate::PredicateKind::ColumnSelection:
-                    if (!validateColumnSelectionPredicate(predicate, db))
+                    if (!validateColumnSelectionPredicate(predicate, db, out_error))
                         return false;
                     break;
                 case Predicate::PredicateKind::Join:
-                    if (!validateJoinPredicate(predicate, db))
+                    if (!validateJoinPredicate(predicate, db, out_error))
                         return false;
                     break;
             }
@@ -227,6 +340,11 @@ bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database
     {
         if (col.name == query.column)
         {
+            if (col.type == Type::TEXT)
+            {
+                throwError("TEXT columns cannot be indexed");
+                return false;
+            }
             column_found = true;
             break;
         }
@@ -338,10 +456,28 @@ bool validateInsertQuery(const AST::InsertQuery &query, const Database &db)
                 }
                 break;
             };
-            default:
+            case Type::TEXT:
             {
-                throwError("Invalid type");
-                return false;
+                // TEXT is a quoted string, no fixed length limit (uint8 payload, max 255 chars)
+                if (query.args[i].value.size() < 2 ||
+                    query.args[i].value.front() != '"' ||
+                    query.args[i].value.back()  != '"')
+                {
+                    std::string output = "column " +
+                        db.tableMap.at(query.tableName).columns[i].name +
+                        " expects a quoted string value";
+                    throwError(output.c_str());
+                    return false;
+                }
+                if (query.args[i].value.size() - 2 > 255)
+                {
+                    std::string output = "column " +
+                        db.tableMap.at(query.tableName).columns[i].name +
+                        " TEXT value exceeds 255 characters";
+                    throwError(output.c_str());
+                    return false;
+                }
+                break;
             };
         }
     }
@@ -395,7 +531,13 @@ bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database
         }
     }
 
-
+    // First column is the primary index — it must be an indexable type
+    const std::string& first_type = query.args[0].type;
+    if (first_type == "text" || first_type == "bool")
+    {
+        throwError("First column must be an indexable type (int, char8, char16, char32) to serve as primary index");
+        return false;
+    }
 
     return true;
 }

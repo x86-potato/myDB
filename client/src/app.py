@@ -1,5 +1,8 @@
 import os
+import readline
 from db import DBConnection, QueryResult
+
+readline.set_history_length(500)
 
 HOST = "localhost"
 PORT = 5432
@@ -59,6 +62,8 @@ def print_streamed_result(db: DBConnection, query: str):
     if result.columns:
         if not state["printed_header"]:
             on_metadata(result.columns)
+        for row in result.rows:
+            on_row(row)
         n = result.row_count
         print(f"({n} row{'s' if n != 1 else ''})")
     else:

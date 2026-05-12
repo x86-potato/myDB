@@ -191,9 +191,9 @@ int Database::erase(const std::string& tableName, Plan& plan, Transaction* txn)
 
     if (plan.paths.size() == 1)
     {
-        Pipeline plan_executor(plan.paths[0], *this, txn);
+        PhysicalPlan plan_executor(plan.paths[0], *this, txn);
 
-        plan_executor.ExecuteDelete();
+        plan_executor.run_delete();
         return 0;
     }
 
@@ -232,6 +232,14 @@ int Database::create_transaction()
     return txn_id;
 }
 
+
+void Database::rollback_transaction(int txn_id)
+{
+    std::lock_guard<std::mutex> lock(txn_mutex);
+    // Erasing calls ~Transaction() which calls rollback(),
+    // releasing all owner_mutex and rw_latch locks held by this transaction.
+    transactions.erase(txn_id);
+}
 
 int Database::commit_transaction(int txn_id)
 {

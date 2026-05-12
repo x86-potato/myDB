@@ -7,7 +7,7 @@
 
 //takes a path and turns each prediacte into a relational object
 
-bool Pipeline::check_if_indexed(const Predicate &predicate)
+bool PhysicalPlan::check_if_indexed(const Predicate &predicate)
 {
     // Check if the path has any indexed predicates
     std::string table_name = std::get<ColumnOperand>(predicate.left).table;
@@ -20,8 +20,7 @@ bool Pipeline::check_if_indexed(const Predicate &predicate)
     }
     return false;
 }
-//we fill the buckets gien our predicates
-void Pipeline::build_buckets()
+void PhysicalPlan::build_predicate_buckets()
 {
     //ALL scan predicates may also be filter predicates,
     //therefore we put them into scan first, then filter
@@ -53,40 +52,7 @@ void Pipeline::build_buckets()
     }
 }
 
-void Pipeline::print_buckets()
-{
-    std::cout << "Scan candidates: " << scan_candidates_.size() << "\n";
-    for (const auto& pred : scan_candidates_)
-    {
-        std::cout << "  Predicate on table "
-                  << std::get<ColumnOperand>(pred->left).table
-                  << " column "
-                  << std::get<ColumnOperand>(pred->left).column
-                  << "\n";
-    }
-
-    std::cout << "Filter candidates: " << filter_candidates_.size() << "\n";
-    for (const auto& pred : filter_candidates_)
-    {
-        std::cout << "  Predicate on table "
-                  << std::get<ColumnOperand>(pred->left).table
-                  << " column "
-                  << std::get<ColumnOperand>(pred->left).column
-                  << "\n";
-    }
-
-    std::cout << "Join candidates: " << join_candidates_.size() << "\n";
-    for (const auto& pred : join_candidates_)
-    {
-        std::cout << "  Predicate on table "
-                  << std::get<ColumnOperand>(pred->left).table
-                  << " column "
-                  << std::get<ColumnOperand>(pred->left).column
-                  << "\n";
-    }
-}
-
-void Pipeline::sort_buckets()
+void PhysicalPlan::trim_scan_candidates()
 {
     //keep only first scan candidate for now
     //later pick a better one based on stats
@@ -101,7 +67,7 @@ void Pipeline::sort_buckets()
     }
 }
 
-bool Pipeline::check_if_filter_needed(const std::string &table_name)
+bool PhysicalPlan::check_if_filter_needed(const std::string &table_name)
 {
     for (const auto &pred : filter_candidates_)
     {
@@ -113,7 +79,7 @@ bool Pipeline::check_if_filter_needed(const std::string &table_name)
     return false;
 }
 
-void Pipeline::populate_filter(
+void PhysicalPlan::populate_filter(
     const std::string &table_name,
     Filter &Filter)
 {
@@ -127,7 +93,7 @@ void Pipeline::populate_filter(
 }
 
 
-Predicate *Pipeline::pick_scan_predicate(const std::string &table_name)
+Predicate *PhysicalPlan::pick_scan_predicate(const std::string &table_name)
 {
     for (const auto &pred : scan_candidates_)
     {
@@ -144,7 +110,7 @@ Predicate *Pipeline::pick_scan_predicate(const std::string &table_name)
 }
 
 
-void Pipeline::build_forest()
+void PhysicalPlan::build_forest()
 {
     for (const auto& table_name : path_.tables)
     {
@@ -185,7 +151,7 @@ int get_index_of_table_in_forest(
     return -1;
 }
 
-void Pipeline::compress_forest()
+void PhysicalPlan::compress_forest_into_root()
 {
     //compress tree into subtrees
     //assume joins are given
@@ -229,28 +195,21 @@ void Pipeline::compress_forest()
     }
 }
 
-Pipeline::Pipeline(Path &path, Database& database, Transaction* txn) 
+PhysicalPlan::PhysicalPlan(Path &path, Database& database, Transaction* txn) 
 :  path_(path), database_(database), txn(txn)
 {
-    build_buckets();
-    sort_buckets();
-
-    //print_buckets();
-
-
+    build_predicate_buckets();
+    trim_scan_candidates();
     build_forest();
     assert (forest.size() != 0);
-
-    compress_forest();
-
+    compress_forest_into_root();
     assert (forest.size() == 1);
     root = std::move(forest[0]);
-    forest.clear(); // Clear the forest to avoid any potential issues with moved-from unique_ptrs
-
+    forest.clear();
 }
 
 
-void Pipeline::ExecuteDelete()
+void PhysicalPlan::run_delete()
 {
     Output output;
     int deleted_count = 0;
@@ -273,7 +232,7 @@ void Pipeline::ExecuteDelete()
 }
 
 
-void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
+void PhysicalPlan::run_update(std::vector<AST::UpdateArg> &update_args)
 {
     //for now assume only one update arg is given
     Table table = database_.get_table(update_args[0].tableName);
@@ -300,130 +259,265 @@ void Pipeline::ExecuteUpdate(std::vector<AST::UpdateArg> &update_args)
 }
 
 
-void Pipeline::Execute(Session* session)
+// -----------------------------------------------------------------------
+// Helpers shared by all select paths
+// -----------------------------------------------------------------------
+
+static int col_display_width(const Column& col)
+{
+    switch (col.type) {
+        case Type::INTEGER: return 10;
+        case Type::CHAR32:  return 32;
+        case Type::CHAR16:  return 16;
+        case Type::CHAR8:   return 8;
+        case Type::BOOL:    return 5;
+        case Type::TEXT:    return 32;
+        default:            return 10;
+    }
+}
+
+std::vector<PhysicalPlan::ColMapping>
+PhysicalPlan::build_col_map(const AST::SelectQuery* query) const
+{
+    std::vector<ColMapping> col_map;
+
+    if (query->select_all)
+    {
+        for (const auto& table_name : path_.tables)
+        {
+            const Table& tbl = database_.get_table(table_name);
+            for (size_t ci = 0; ci < tbl.columns.size(); ci++)
+            {
+                std::string header = table_name + "." + tbl.columns[ci].name;
+                int width = std::max(col_display_width(tbl.columns[ci]),
+                                     static_cast<int>(header.length()));
+                col_map.push_back({table_name, ci, header, width});
+            }
+        }
+    }
+    else
+    {
+        for (const auto& sc : query->selected_columns)
+        {
+            std::string tname = sc.table.empty() ? path_.tables[0] : sc.table;
+            const Table& tbl = database_.get_table(tname);
+            for (size_t ci = 0; ci < tbl.columns.size(); ci++)
+            {
+                if (tbl.columns[ci].name == sc.column)
+                {
+                    std::string header = tname + "." + tbl.columns[ci].name;
+                    int width = std::max(col_display_width(tbl.columns[ci]),
+                                         static_cast<int>(header.length()));
+                    col_map.push_back({tname, ci, header, width});
+                    break;
+                }
+            }
+        }
+    }
+
+    return col_map;
+}
+
+// -----------------------------------------------------------------------
+// Aggregate path: COUNT / SUM / MAX / MIN
+// -----------------------------------------------------------------------
+
+void PhysicalPlan::run_aggregate(const AST::SelectQuery* query, Session* session)
 {
     bool send_packets = (session != nullptr && !session->is_admin());
 
-    if (send_packets) {
-        std::vector<const Table*> tables;
-        for (const auto& table_name : path_.tables) {
-            tables.push_back(&database_.get_table(table_name));
-        }
+    std::string tname = query->aggregate_column.table.empty()
+        ? path_.tables[0]
+        : query->aggregate_column.table;
 
-        Output current_output;
-        if (!root->next(current_output)) {
-            session->send_metadata(tables, false);
-            return;
-        }
+    int col_idx = -1;
+    if (query->aggregate != AST::AggregateType::COUNT)
+        col_idx = database_.get_table(tname).get_column_index(query->aggregate_column.column);
 
-        session->send_metadata(tables, true);
+    Output output;
+    long long count   = 0;
+    long long agg_val = 0;
+    bool has_rows     = false;
 
-        while (true) {
-            Output next_output;
-            bool has_next = root->next(next_output);
-            session->send_row(current_output.tuples_, !has_next);
-
-            if (!has_next) {
+    while (root->next(output))
+    {
+        count++;
+        if (query->aggregate != AST::AggregateType::COUNT)
+        {
+            for (const auto& tuple : output.tuples_)
+            {
+                if (tuple.table_->name != tname) continue;
+                long long val = std::stoll(tuple.record.get_token(col_idx, *tuple.table_));
+                switch (query->aggregate)
+                {
+                    case AST::AggregateType::SUM: agg_val += val; break;
+                    case AST::AggregateType::MAX: if (!has_rows || val > agg_val) agg_val = val; break;
+                    case AST::AggregateType::MIN: if (!has_rows || val < agg_val) agg_val = val; break;
+                    default: break;
+                }
+                has_rows = true;
                 break;
             }
-
-            current_output = std::move(next_output);
         }
-
-        return;
+        if (query->limit > 0 && count >= query->limit) break;
     }
 
-    // --- Admin / stdout path (unchanged) ---
+    long long result;
+    std::string label;
+    AggregateKind kind;
 
-    // Calculate column widths based on type
-    std::vector<int> column_widths;
-    std::vector<std::string> column_headers;
+    switch (query->aggregate)
+    {
+        case AST::AggregateType::COUNT:
+            result = count; label = "count(*)"; kind = AggregateKind::COUNT; break;
+        case AST::AggregateType::SUM:
+            result = agg_val; label = "sum(" + query->aggregate_column.column + ")"; kind = AggregateKind::SUM; break;
+        case AST::AggregateType::MAX:
+            result = agg_val; label = "max(" + query->aggregate_column.column + ")"; kind = AggregateKind::MAX; break;
+        case AST::AggregateType::MIN:
+            result = agg_val; label = "min(" + query->aggregate_column.column + ")"; kind = AggregateKind::MIN; break;
+        default:
+            result = 0; label = "?"; kind = AggregateKind::COUNT; break;
+    }
 
+    std::string result_str = std::to_string(result);
+
+    if (send_packets)
+        session->send_aggregate(kind, label, result_str);
+    else
+        std::cout << label << "\n" << std::string(label.size(), '-') << "\n" << result_str << "\n";
+}
+
+// -----------------------------------------------------------------------
+// Row path: TCP packet stream to client
+// -----------------------------------------------------------------------
+
+void PhysicalPlan::run_select_packets(const AST::SelectQuery* query,
+                                      const std::vector<ColMapping>& col_map,
+                                      Session* session)
+{
+    auto to_col_type = [](Type t) -> ColumnType {
+        switch (t) {
+            case Type::INTEGER: return ColumnType::INT;
+            case Type::BOOL:    return ColumnType::BOOL;
+            default:            return ColumnType::TEXT;
+        }
+    };
+
+    std::vector<TableDescriptor> descriptors;
     for (const auto& table_name : path_.tables)
     {
+        TableDescriptor td;
+        td.name = table_name;
         const Table& tbl = database_.get_table(table_name);
-        for (const auto& col : tbl.columns) {
-            std::string header = table_name + "." + col.name;
-            column_headers.push_back(header);
-
-            int width;
-            switch (col.type) {
-                case Type::INTEGER:
-                    width = 10;  // Fits ~2 billion
-                    break;
-                case Type::CHAR32:
-                    width = 32;
-                    break;
-                case Type::CHAR16:
-                    width = 16;
-                    break;
-                case Type::CHAR8:
-                    width = 8;
-                    break;
-                case Type::BOOL:
-                    width = 5;  // "true" or "false"
-                    break;
-                case Type::TEXT:
-                    width = 32;  // Default for TEXT
-                    break;
-                default:
-                    width = 10;
-            }
-            // Ensure width is at least as wide as the header
-            width = std::max(width, static_cast<int>(header.length()));
-            column_widths.push_back(width);
+        for (const auto& cm : col_map)
+        {
+            if (cm.table_name == table_name)
+                td.columns.push_back({tbl.columns[cm.col_idx].name,
+                                      to_col_type(tbl.columns[cm.col_idx].type)});
         }
+        if (!td.columns.empty())
+            descriptors.push_back(std::move(td));
     }
 
-    // Helper lambda to print separator line
-    auto print_separator = [&column_widths]() {
-        std::cout << "+";
-        for (size_t i = 0; i < column_widths.size(); ++i) {
-            std::cout << std::string(column_widths[i] + 2, '-') << "+";
+    Output current_output;
+    if (!root->next(current_output))
+    {
+        session->send_metadata(descriptors, false);
+        return;
+    }
+    session->send_metadata(descriptors, true);
+
+    int rows_sent = 0;
+    while (true)
+    {
+        std::vector<std::string> values;
+        for (const auto& cm : col_map)
+        {
+            for (const auto& tuple : current_output.tuples_)
+            {
+                if (tuple.table_->name == cm.table_name)
+                {
+                    values.push_back(tuple.record.get_token(cm.col_idx, *tuple.table_));
+                    break;
+                }
+            }
         }
+        rows_sent++;
+        bool limit_reached = (query->limit > 0 && rows_sent >= query->limit);
+        Output next_output;
+        bool has_next = !limit_reached && root->next(next_output);
+        session->send_row_values(values, !has_next);
+        if (!has_next) break;
+        current_output = std::move(next_output);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Row path: pretty-printed stdout (admin session)
+// -----------------------------------------------------------------------
+
+void PhysicalPlan::run_select_stdout(const AST::SelectQuery* query,
+                                     const std::vector<ColMapping>& col_map)
+{
+    auto print_separator = [&col_map]() {
+        std::cout << "+";
+        for (const auto& cm : col_map)
+            std::cout << std::string(cm.display_width + 2, '-') << "+";
         std::cout << "\n";
     };
 
-    // Print top border
     print_separator();
-
-    // Print header
     std::cout << "| ";
-    for (size_t i = 0; i < column_headers.size(); ++i) {
-        std::cout << std::left << std::setw(column_widths[i]) << column_headers[i] << " | ";
-    }
+    for (const auto& cm : col_map)
+        std::cout << std::left << std::setw(cm.display_width) << cm.header << " | ";
     std::cout << "\n";
-
-    // Print separator after header
     print_separator();
 
     Output output;
-    int i = 0;
+    int rows = 0;
     while (root->next(output))
     {
-        i++;
+        rows++;
         std::cout << "| ";
-        size_t col_idx = 0;
-        for (const auto& tuple : output.tuples_)
+        for (const auto& cm : col_map)
         {
-            for (const auto& token : tuple.record.to_tokens(*tuple.table_))
+            for (const auto& tuple : output.tuples_)
             {
-                std::cout << std::left << std::setw(column_widths[col_idx]) << token << " | ";
-                col_idx++;
+                if (tuple.table_->name == cm.table_name)
+                {
+                    std::string val = tuple.record.get_token(cm.col_idx, *tuple.table_);
+                    std::cout << std::left << std::setw(cm.display_width) << val << " | ";
+                    break;
+                }
             }
         }
         std::cout << "\n";
+        if (query->limit > 0 && rows >= query->limit) break;
     }
 
-    // Print bottom border
     print_separator();
-
-    std::cout << "Returned " << i << " records." << "\n";
+    std::cout << "Returned " << rows << " records.\n";
 }
 
+// -----------------------------------------------------------------------
+// run_select: dispatch to the right execution path
+// -----------------------------------------------------------------------
 
+void PhysicalPlan::run_select(const AST::SelectQuery* query, Session* session)
+{
+    if (query->aggregate != AST::AggregateType::NONE)
+    {
+        run_aggregate(query, session);
+        return;
+    }
 
+    auto col_map = build_col_map(query);
 
-
+    if (session != nullptr && !session->is_admin())
+        run_select_packets(query, col_map, session);
+    else
+        run_select_stdout(query, col_map);
+}
 
 //helpers

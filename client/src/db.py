@@ -6,6 +6,7 @@ STATUS_OK       = 0
 STATUS_ERROR    = 1
 STATUS_METADATA = 2
 STATUS_ROW      = 3
+STATUS_AGGREGATE = 4
 
 FLAG_LAST = 0
 FLAG_MORE = 1
@@ -64,6 +65,20 @@ def _parse_row(payload):
         offset += val_len
         values.append(val)
     return values
+
+
+def _parse_aggregate(payload):
+    offset = 0
+    # aggregate_kind byte (unused by client, display only)
+    offset += 1
+    label_len = struct.unpack_from("<I", payload, offset)[0]
+    offset += 4
+    label = payload[offset:offset + label_len].decode()
+    offset += label_len
+    val_len = struct.unpack_from("<I", payload, offset)[0]
+    offset += 4
+    value = payload[offset:offset + val_len].decode()
+    return label, value
 
 
 class QueryResult:
@@ -186,5 +201,9 @@ class DBConnection:
                 if flag == FLAG_LAST:
                     break
             return QueryResult(ok=True, columns=columns, rows=rows or [], row_count=row_count)
+
+        if status == STATUS_AGGREGATE:
+            label, value = _parse_aggregate(payload)
+            return QueryResult(ok=True, columns=[label], rows=[[value]], row_count=1)
 
         return QueryResult(ok=False, error=f"Unexpected status code: {status}")

@@ -28,6 +28,14 @@ void Session::run(Server& server)
         //current_transaction_id = server.database.create_transaction();
         server.executor.execute(query, *this);
     }
+
+    // Client disconnected. If a BEGIN transaction was never committed,
+    // roll it back now to release all held page locks.
+    if (current_transaction_id != -1) {
+        server.database.rollback_transaction(current_transaction_id);
+        current_transaction_id = -1;
+    }
+
     if(client_fd != -1) {
         close(client_fd);
         client_fd = -1;
@@ -145,6 +153,88 @@ void Session::send_row(std::vector<OutputTuple> &tuples, bool last_packet)
     }
 
     // backfill payload length
+    uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
+    memcpy(buf.data() + 2, &payload_len, 4);
+
+    write(client_fd, buf.data(), buf.size());
+}
+
+void Session::send_metadata(const std::vector<TableDescriptor>& descriptors, bool more_packets)
+{
+    std::vector<uint8_t> payload;
+    payload.push_back(static_cast<uint8_t>(StatusCode::METADATA));
+    payload.push_back(static_cast<uint8_t>(more_packets ? PacketFlag::MORE_PACKETS : PacketFlag::LAST_PACKET));
+    size_t payload_length_pos = payload.size();
+    int final_payload_length = 0;
+    push_u32(payload, 0); // placeholder
+
+    final_payload_length += 4;
+    push_u32(payload, static_cast<uint32_t>(descriptors.size()));
+
+    for (const auto& td : descriptors)
+    {
+        final_payload_length += 4 + static_cast<int>(td.name.length());
+        push_u32(payload, td.name.length());
+        push_str(payload, td.name);
+
+        final_payload_length += 4;
+        push_u32(payload, static_cast<uint32_t>(td.columns.size()));
+
+        for (const auto& col : td.columns)
+        {
+            final_payload_length += 4 + static_cast<int>(col.name.length()) + 1;
+            push_u32(payload, col.name.length());
+            push_str(payload, col.name);
+            payload.push_back(static_cast<uint8_t>(col.type));
+        }
+    }
+
+    payload[payload_length_pos]     =  final_payload_length        & 0xFF;
+    payload[payload_length_pos + 1] = (final_payload_length >>  8) & 0xFF;
+    payload[payload_length_pos + 2] = (final_payload_length >> 16) & 0xFF;
+    payload[payload_length_pos + 3] = (final_payload_length >> 24) & 0xFF;
+
+    write(client_fd, payload.data(), payload.size());
+}
+
+void Session::send_row_values(const std::vector<std::string>& values, bool last_packet)
+{
+    std::vector<uint8_t> buf;
+    buf.reserve(128);
+
+    buf.push_back(static_cast<uint8_t>(StatusCode::ROW));
+    buf.push_back(last_packet ? static_cast<uint8_t>(PacketFlag::LAST_PACKET)
+                              : static_cast<uint8_t>(PacketFlag::MORE_PACKETS));
+    push_u32(buf, 0); // payload length placeholder
+
+    push_u32(buf, static_cast<uint32_t>(values.size()));
+    for (const auto& val : values)
+    {
+        push_u32(buf, static_cast<uint32_t>(val.length()));
+        push_str(buf, val);
+    }
+
+    uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
+    memcpy(buf.data() + 2, &payload_len, 4);
+
+    write(client_fd, buf.data(), buf.size());
+}
+
+void Session::send_aggregate(AggregateKind kind, const std::string& label, const std::string& value)
+{
+    std::vector<uint8_t> buf;
+    buf.reserve(32);
+
+    buf.push_back(static_cast<uint8_t>(StatusCode::AGGREGATE));
+    buf.push_back(static_cast<uint8_t>(PacketFlag::LAST_PACKET));
+    push_u32(buf, 0); // payload length placeholder
+
+    buf.push_back(static_cast<uint8_t>(kind));
+    push_u32(buf, static_cast<uint32_t>(label.size()));
+    push_str(buf, label);
+    push_u32(buf, static_cast<uint32_t>(value.size()));
+    push_str(buf, value);
+
     uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
     memcpy(buf.data() + 2, &payload_len, 4);
 

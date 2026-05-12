@@ -65,8 +65,8 @@ public:
     Plan(const AST::SelectQuery& query);
     Plan(const std::string& tableName, const AST::Condition& query);
 
-    void build_paths(AST::Expr* expr, Paths& paths);
-    Predicate make_predicate(AST::Expr* expr);
+    void decompose_condition(AST::Expr* expr, Paths& paths);
+    Predicate extract_predicate(AST::Expr* expr);
 
     void debug_print_predicate(const Predicate& p);
     void debug_print_path(const Path& path, size_t index);

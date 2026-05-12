@@ -20,6 +20,7 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <csignal>
 
 static void run_insert_bench(Executor& executor, Database& database, int n)
 {
@@ -278,6 +279,11 @@ static void run_triplet_bench(Executor& executor, int inserts_per_table)
 
 int main()
 {
+    // Ignore SIGPIPE so that writing to a disconnected TCP client
+    // returns EPIPE (checked via write's return value) instead of
+    // killing the entire server process.
+    signal(SIGPIPE, SIG_IGN);
+
     Database database;
     Executor executor(database);
     CLI cli(executor);

@@ -186,6 +186,30 @@ int Transaction::commit() {
 }
 
 
+void Transaction::rollback()
+{
+    // Release all exclusive ownership locks (write locks from B+tree ops)
+    for (off_t page : locks_held) {
+        lock_manager.release_ownership(txn_id, page);
+    }
+    locks_held.clear();
+
+    // Release any temporary ownership locks (B+tree structural locks)
+    for (off_t page : temp_locks) {
+        lock_manager.release_ownership(txn_id, page);
+    }
+    temp_locks.clear();
+
+    // Release shared (read) locks
+    for (off_t page : shared_locks_held) {
+        lock_manager.release_shared(txn_id, page);
+    }
+    shared_locks_held.clear();
+
+    // Discard private page buffer — changes are abandoned, not written to cache or WAL
+    pages.clear();
+}
+
 void Transaction::try_temp_lock(off_t page_location)
 {
     if (locks_held.count(page_location) || temp_locks.count(page_location)) {

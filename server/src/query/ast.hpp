@@ -169,10 +169,30 @@ namespace AST
         Condition condition;
 
     };
+    struct SelectColumn
+    {
+        std::string table;   // empty when not explicitly qualified
+        std::string column;
+    };
+
+    enum class AggregateType
+    {
+        NONE,
+        COUNT,
+        SUM,
+        MAX,
+        MIN
+    };
+
     struct SelectQuery : Query
     {
         StringVec tableNames;
         bool has_where = false;
+        bool select_all = false;
+        std::vector<SelectColumn> selected_columns;
+        AggregateType aggregate = AggregateType::NONE;
+        SelectColumn aggregate_column; // table/column target for SUM/MAX/MIN
+        int limit = -1; // -1 means no limit
         Condition condition;
     };
     struct LoadQuery : Query

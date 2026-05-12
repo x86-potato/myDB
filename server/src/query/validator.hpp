@@ -12,7 +12,8 @@
 
 class Database;
 
-bool validatePlan(const Plan& plan, const Database &db);
+bool validatePlan(const Plan& plan, const Database &db, std::string* out_error = nullptr);
+bool validateSelectQuery(const AST::SelectQuery &query, const Database &db, std::string* out_error = nullptr);
 bool validateCreateIndexQuery(const AST::CreateIndexQuery &query, const Database &db);
 bool validateInsertQuery(const AST::InsertQuery &query, const Database &db);
 bool validateCreateTableQuery(const AST::CreateTableQuery &query, const Database &db);

@@ -10,6 +10,7 @@ enum class StatusCode : uint8_t {
     ERROR,       // error response
     METADATA,    // SELECT column metadata
     ROW,         // SELECT row data
+    AGGREGATE,   // COUNT(*) / SUM / MAX / MIN result
 };
 
 enum class PacketFlag : uint8_t {
@@ -22,6 +23,14 @@ enum class ColumnType : uint8_t {
     TEXT,
     FLOAT,
     BOOL,
+};
+
+// Aggregate function kinds, used in AGGREGATE packets
+enum class AggregateKind : uint8_t {
+    COUNT = 0,
+    SUM   = 1,
+    MAX   = 2,
+    MIN   = 3,
 };
 
 // --- Universal packet envelope ---
@@ -82,4 +91,18 @@ struct RowPayload {
 
 struct ErrorPayload {
     std::string message;
+};
+
+// --- Aggregate payload (status = AGGREGATE, flag = LAST_PACKET) ---
+// Wire layout of payload:
+//   1 byte  aggregate_kind  (AggregateKind enum)
+//   4 bytes label_length
+//   N bytes label           (e.g. "count(*)", "sum(age)")
+//   4 bytes value_length
+//   N bytes value           (string, e.g. "42")
+
+struct AggregatePayload {
+    AggregateKind kind;
+    std::string   label;
+    std::string   value;
 };

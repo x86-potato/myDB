@@ -58,5 +58,6 @@ public:
     //@returns a new transaction id
     int create_transaction();
     int commit_transaction(int txn_id);
+    void rollback_transaction(int txn_id);
 
 };

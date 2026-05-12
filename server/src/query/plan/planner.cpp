@@ -15,7 +15,7 @@ Plan::Plan(const AST::SelectQuery& query)
     }
 
     paths.push_back(Path{.tables = query.tableNames, .predicates = {},}); // start with one path
-    build_paths(query.condition.root.get(), paths);
+    decompose_condition(query.condition.root.get(), paths);
 }
 
 Plan::Plan(const std::string &tableName, const AST::Condition &query)
@@ -26,10 +26,10 @@ Plan::Plan(const std::string &tableName, const AST::Condition &query)
         return;
     }
     paths.push_back(Path{.tables = {tableName}, .predicates = {},}); // start with one path
-    build_paths(query.root.get(), paths);
+    decompose_condition(query.root.get(), paths);
 }
 
-void Plan::build_paths(AST::Expr* expr, Paths& paths)
+void Plan::decompose_condition(AST::Expr* expr, Paths& paths)
 {
     if (!expr) return;
 
@@ -41,8 +41,8 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
 
         if (node.op == AST::Op::AND)
         {
-            build_paths(node.left.get(), paths);
-            build_paths(node.right.get(), paths);
+            decompose_condition(node.left.get(), paths);
+            decompose_condition(node.right.get(), paths);
             return;
         }
 
@@ -51,8 +51,8 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
             Paths left_paths = paths;
             Paths right_paths = paths;
 
-            build_paths(node.left.get(), left_paths);
-            build_paths(node.right.get(), right_paths);
+            decompose_condition(node.left.get(), left_paths);
+            decompose_condition(node.right.get(), right_paths);
 
             paths.clear();
             paths.insert(paths.end(), left_paths.begin(), left_paths.end());
@@ -60,7 +60,7 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
             return;
         }
 
-        Predicate p = make_predicate(expr);
+        Predicate p = extract_predicate(expr);
         for (auto& path : paths)
         {
             path.predicates.push_back(p);
@@ -69,7 +69,7 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
     }
 }
 
-Predicate Plan::make_predicate(AST::Expr* expr)
+Predicate Plan::extract_predicate(AST::Expr* expr)
 {
     auto logicalPtr = std::get_if<std::unique_ptr<AST::LogicalExpr>>(expr);
     if (!logicalPtr || !*logicalPtr)

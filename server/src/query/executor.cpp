@@ -207,15 +207,15 @@ void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
     if(plan.paths.size() == 0)
     {
         Path temp = Path{};
-        Pipeline plan_executor(temp, database, &txn);
+        PhysicalPlan plan_executor(temp, database, &txn);
 
-        plan_executor.ExecuteUpdate(query->args);
+        plan_executor.run_update(query->args);
     }
     else
     {
-        Pipeline plan_executor(plan.paths[0], database, &txn);
+        PhysicalPlan plan_executor(plan.paths[0], database, &txn);
 
-        plan_executor.ExecuteUpdate(query->args);
+        plan_executor.run_update(query->args);
     }
 }
 
@@ -229,24 +229,31 @@ void Executor::execute_select(AST::SelectQuery* query, Session& session) {
     Transaction& txn = *txn_ptr;
 
     Plan plan(*query);
-    if (validatePlan(plan, database) == false)
+    std::string error_msg;
+    if (!validateSelectQuery(*query, database, &error_msg))
     {
-       return;
+        session.send_error(error_msg);
+        return;
+    }
+    if (!validatePlan(plan, database, &error_msg))
+    {
+        session.send_error(error_msg);
+        return;
     }
 
 
     if(plan.paths.size() == 0)
     {
         Path temp = Path{};
-        Pipeline plan_executor(temp, database, &txn);
+        PhysicalPlan plan_executor(temp, database, &txn);
 
-        plan_executor.Execute(&session);
+        plan_executor.run_select(query, &session);
     }
     else
     {
-        Pipeline plan_executor(plan.paths[0], database, &txn);
+        PhysicalPlan plan_executor(plan.paths[0], database, &txn);
 
-        plan_executor.Execute(&session);
+        plan_executor.run_select(query, &session);
     }
 }
 
@@ -317,10 +324,14 @@ void Executor::execute_create_table(AST::CreateTableQuery* query, Session& sessi
     Table newTable;
     newTable.name = query->tableName;
 
-    for (auto& arg : query->args)
+    for (size_t i = 0; i < query->args.size(); i++)
     {
-        Type type = TypeUtil::string_to_type(arg.type);
-        Column newColumn(arg.column, type);
+        Type type = TypeUtil::string_to_type(query->args[i].type);
+        Column newColumn(query->args[i].column, type);
+
+        // First column is the primary index (unless it's TEXT or BOOL, which are not indexable)
+        if (i == 0 && type != Type::TEXT && type != Type::BOOL)
+            newColumn.indexLocation = 0;
 
         newTable.columns.push_back(newColumn);
     }

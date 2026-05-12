@@ -36,6 +36,10 @@ public:
 
     Transaction(int txn_id, Cache& cache, LockManager &lock_manager, WAL &wal) : txn_id(txn_id), cache(cache), lock_manager(lock_manager), wal(wal) {};
 
+    // RAII: if the transaction was never committed (session crash, exception),
+    // the destructor rolls back automatically, releasing all held locks.
+    ~Transaction() { rollback(); }
+
     void begin();
 
     int commit();

@@ -233,7 +233,7 @@ Record::Record(const std::byte* read_from, const Table& table)
         switch (table.columns[i].type)
         {
             case Type::BOOL:
-                str += (*p++ == '1') ? "true" : "false";
+                str += *p++;  // store raw '0'/'1' byte, matching the TokenVec constructor
                 col_len = 1;
                 break;
             case Type::INTEGER:

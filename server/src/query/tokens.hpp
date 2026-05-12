@@ -51,6 +51,11 @@ enum class TokenType
     KW_WHERE,
     ASTERISK,
     KW_FROM,
+    KW_COUNT,
+    KW_LIMIT,
+    KW_SUM,
+    KW_MAX,
+    KW_MIN,
 
 
 
@@ -77,6 +82,7 @@ enum class TokenType
     //INSERT tokens
     KW_INSERT,
     KW_INTO,
+    KW_VALUES,
 
 
     //arg tokens
@@ -179,6 +185,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"from",    TokenType::KW_FROM},
         {"on",      TokenType::KW_ON},
         {"select",  TokenType::KW_SELECT},
+        {"count",   TokenType::KW_COUNT},
         {"update",  TokenType::KW_UPDATE},
         {"delete",  TokenType::KW_DELETE},
         {"set",     TokenType::KW_SET},
@@ -186,6 +193,10 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"switch",  TokenType::KW_SWITCH},
 
         {"where",   TokenType::KW_WHERE},
+        {"limit",   TokenType::KW_LIMIT},
+        {"sum",     TokenType::KW_SUM},
+        {"max",     TokenType::KW_MAX},
+        {"min",     TokenType::KW_MIN},
         {"run",      TokenType::KW_RUN},
         {"begin",    TokenType::KW_BEGIN},
         {"commit",      TokenType::KW_COMMIT},
@@ -201,6 +212,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"info",    TokenType::KW_INFO},
         {"insert",  TokenType::KW_INSERT},
         {"into",    TokenType::KW_INTO},
+        {"values",  TokenType::KW_VALUES},
         {"load",    TokenType::KW_LOAD},
         {"and",     TokenType::AND},
         {"or",      TokenType::OR},

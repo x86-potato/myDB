@@ -54,14 +54,6 @@ int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
     }
     tempArg.column = iterator.getCurr()->name;
 
-
-    if(iterator.getNext()->type != TokenType::EQUAL)
-    {
-        parserError("Expected a equal sign");
-        return 1;
-    }
-
-
     switch(iterator.getNext()->type)
     {
         case TokenType::TEXT:
@@ -347,6 +339,12 @@ ParserReturn Parser::parseInsert()
         return {1, nullptr};
     }
     query.get()->tableName = iterator.getCurr()->name;
+    //expect VALUES keyword
+    if(iterator.getNext()->type != TokenType::KW_VALUES)
+    {
+        parserError("Expected VALUES keyword");
+        return {1, nullptr};
+    }
     //expect opening parens
     if(iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
     {
@@ -463,6 +461,10 @@ std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
             return std::make_unique<AST::Expr>
             (AST::Expr{AST::Literal{tok->name}});
 
+        case TokenType::BOOL_LITERAL:
+            return std::make_unique<AST::Expr>
+            (AST::Expr{AST::Literal{tok->name}});
+
         case TokenType::OPENING_PARENTHESIS: {
             auto expr = parse_expr(0,table_name);            // parse inside parentheses
             Token* close = iterator.getNext();    // consume th/e ')'
@@ -481,12 +483,119 @@ ParserReturn Parser::parseSelect()
     auto query = std::make_unique<AST::SelectQuery>();
     query->type = AST::QueryType::Select;
 
-    //for now only handle full projection
+    Token* first = iterator.getNext();
 
-    //expect asterisk
-    if(iterator.getNext()->type != TokenType::ASTERISK)
+    if (first->type == TokenType::KW_COUNT)
     {
-        parserError("Expected a asterisk");
+        if (iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
+        {
+            parserError("Expected ( after COUNT");
+            return {1, nullptr};
+        }
+        if (iterator.getNext()->type != TokenType::ASTERISK)
+        {
+            parserError("Expected * inside COUNT()");
+            return {1, nullptr};
+        }
+        if (iterator.getNext()->type != TokenType::CLOSING_PARENTHESIS)
+        {
+            parserError("Expected ) after COUNT(*");
+            return {1, nullptr};
+        }
+        query->aggregate = AST::AggregateType::COUNT;
+    }
+    else if (first->type == TokenType::KW_SUM ||
+             first->type == TokenType::KW_MAX ||
+             first->type == TokenType::KW_MIN)
+    {
+        AST::AggregateType agg_type;
+        if      (first->type == TokenType::KW_SUM) agg_type = AST::AggregateType::SUM;
+        else if (first->type == TokenType::KW_MAX) agg_type = AST::AggregateType::MAX;
+        else                                        agg_type = AST::AggregateType::MIN;
+
+        if (iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
+        {
+            parserError("Expected ( after aggregate function");
+            return {1, nullptr};
+        }
+        Token* col_tok = iterator.getNext();
+        if (!col_tok || col_tok->type != TokenType::IDENTIFIER)
+        {
+            parserError("Expected column name inside aggregate");
+            return {1, nullptr};
+        }
+        AST::SelectColumn sc;
+        if (iterator.peeknext() && iterator.peeknext()->type == TokenType::PERIOD)
+        {
+            sc.table = col_tok->name;
+            iterator.getNext(); // consume '.'
+            Token* col = iterator.getNext();
+            if (!col || col->type != TokenType::IDENTIFIER)
+            {
+                parserError("Expected column name after '.'");
+                return {1, nullptr};
+            }
+            sc.column = col->name;
+        }
+        else
+        {
+            sc.column = col_tok->name;
+        }
+        if (iterator.getNext()->type != TokenType::CLOSING_PARENTHESIS)
+        {
+            parserError("Expected ) after aggregate column");
+            return {1, nullptr};
+        }
+        query->aggregate = agg_type;
+        query->aggregate_column = sc;
+    }
+    else if (first->type == TokenType::ASTERISK)
+    {
+        query->select_all = true;
+    }
+    else if (first->type == TokenType::IDENTIFIER)
+    {
+        // parse column list: col  or  table.col, comma-separated
+        auto parse_one = [&](Token* tok) -> int {
+            AST::SelectColumn sc;
+            if (iterator.peeknext() && iterator.peeknext()->type == TokenType::PERIOD)
+            {
+                sc.table = tok->name;
+                iterator.getNext(); // consume '.'
+                Token* col = iterator.getNext();
+                if (!col || col->type != TokenType::IDENTIFIER)
+                {
+                    parserError("Expected column name after '.'");
+                    return 1;
+                }
+                sc.column = col->name;
+            }
+            else
+            {
+                sc.column = tok->name;
+                // sc.table left empty; resolved to first table at execution
+            }
+            query->selected_columns.push_back(sc);
+            return 0;
+        };
+
+        if (parse_one(first) != 0) return {1, nullptr};
+
+        while (iterator.peeknext() && iterator.peeknext()->type == TokenType::COMMA)
+        {
+            iterator.getNext(); // consume ','
+            Token* col = iterator.getNext();
+            if (!col || col->type != TokenType::IDENTIFIER)
+            {
+                parserError("Expected column name after ','");
+                return {1, nullptr};
+            }
+            if (parse_one(col) != 0) return {1, nullptr};
+        }
+    }
+    else
+    {
+        parserError("Expected *, COUNT(*), SUM(col), MAX(col), MIN(col), or column list after SELECT");
         return {1, nullptr};
     }
 
@@ -522,17 +631,27 @@ ParserReturn Parser::parseSelect()
 
 
 
-    // expect where or semicolon
-
+    // expect where, limit, or semicolon
     switch (iterator.getNext()->type) {
         case TokenType::SEMICOLON:
             query->has_where = false;
             return {0, std::move(query)};
+        case TokenType::KW_LIMIT: {
+            Token* limit_tok = iterator.getNext();
+            if (!limit_tok || limit_tok->type != TokenType::LITERAL)
+            {
+                parserError("Expected integer after LIMIT");
+                return {1, nullptr};
+            }
+            query->limit = std::stoi(limit_tok->name);
+            query->has_where = false;
+            return {0, std::move(query)};
+        }
         case TokenType::KW_WHERE:
             query->has_where = true;
             break;
         default:
-            parserError("Expected WHERE keyword or semicolon");
+            parserError("Expected WHERE, LIMIT, or semicolon");
             return {1, nullptr};
     }
 
@@ -544,6 +663,19 @@ ParserReturn Parser::parseSelect()
 
 
     query->condition = std::move(*condition);
+
+    // optional LIMIT after WHERE condition
+    if (iterator.peeknext() && iterator.peeknext()->type == TokenType::KW_LIMIT)
+    {
+        iterator.getNext(); // consume KW_LIMIT
+        Token* limit_tok = iterator.getNext();
+        if (!limit_tok || limit_tok->type != TokenType::LITERAL)
+        {
+            parserError("Expected integer after LIMIT");
+            return {1, nullptr};
+        }
+        query->limit = std::stoi(limit_tok->name);
+    }
 
     return {0, std::move(query)};
 }
