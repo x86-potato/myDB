@@ -42,6 +42,7 @@ void Record::update_column(int column_index, std::string &value, const Table& ta
             uint8_t new_len = static_cast<uint8_t>(value.size());
             // Note: offset points to the length byte, not the data
             uint8_t old_len = static_cast<uint8_t>(str[offset]);
+            (void)old_len;
 
             size_t old_total = column_lengths[column_index];
             size_t new_total = 1 + new_len;

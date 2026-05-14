@@ -1,8 +1,8 @@
-#include "planner.hpp"
+#include "logical.hpp"
 #include <cassert>
 
 
-Plan::Plan(const AST::SelectQuery& query)
+LogicalPlan::LogicalPlan(const AST::SelectQuery& query)
 {
     //TODO: multi table join later
 
@@ -18,7 +18,7 @@ Plan::Plan(const AST::SelectQuery& query)
     decompose_condition(query.condition.root.get(), paths);
 }
 
-Plan::Plan(const std::string &tableName, const AST::Condition &query)
+LogicalPlan::LogicalPlan(const std::string &tableName, const AST::Condition &query)
 {
     if(!query.root)
     {
@@ -29,7 +29,7 @@ Plan::Plan(const std::string &tableName, const AST::Condition &query)
     decompose_condition(query.root.get(), paths);
 }
 
-void Plan::decompose_condition(AST::Expr* expr, Paths& paths)
+void LogicalPlan::decompose_condition(AST::Expr* expr, Paths& paths)
 {
     if (!expr) return;
 
@@ -69,7 +69,7 @@ void Plan::decompose_condition(AST::Expr* expr, Paths& paths)
     }
 }
 
-Predicate Plan::extract_predicate(AST::Expr* expr)
+Predicate LogicalPlan::extract_predicate(AST::Expr* expr)
 {
     auto logicalPtr = std::get_if<std::unique_ptr<AST::LogicalExpr>>(expr);
     if (!logicalPtr || !*logicalPtr)
@@ -132,7 +132,7 @@ Predicate Plan::extract_predicate(AST::Expr* expr)
 
     throw std::runtime_error("Predicate maker failed");
 }
-void Plan::debug_print_predicate(const Predicate& p)
+void LogicalPlan::debug_print_predicate(const Predicate& p)
 {
     struct OperandPrinter {
         void operator()(const ColumnOperand& op) const {
@@ -151,7 +151,7 @@ void Plan::debug_print_predicate(const Predicate& p)
     std::visit(OperandPrinter{}, p.right);
 }
 
-void Plan::debug_print_path(const Path& path, size_t index)
+void LogicalPlan::debug_print_path(const Path& path, size_t index)
 {
     std::cout << "Path " << index << ": ";
 
@@ -165,9 +165,9 @@ void Plan::debug_print_path(const Path& path, size_t index)
     std::cout << "\n";
 }
 
-void Plan::debug_print_plan(const Plan& plan)
+void LogicalPlan::debug_print_plan(const LogicalPlan& plan)
 {
-    std::cout << "Execution Plan\n";
+    std::cout << "Execution LogicalPlan\n";
     std::cout << "--------------\n";
 
     for (size_t i = 0; i < plan.paths.size(); ++i)
@@ -175,7 +175,7 @@ void Plan::debug_print_plan(const Plan& plan)
 }
 
 
-void Plan::execute()
+void LogicalPlan::execute()
 {
 
 }

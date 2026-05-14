@@ -252,6 +252,7 @@ void WAL::build_wal()
 
 void WAL::recover(Database& database)
 {
+    (void)database;
     // Re-read header just to be absolutely sure we are in sync
     if (pread(wal_file_fd, &header, sizeof(WALHeaderBlock), 0) == -1) {
         perror("pread");

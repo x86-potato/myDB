@@ -203,7 +203,16 @@ class DBConnection:
             return QueryResult(ok=True, columns=columns, rows=rows or [], row_count=row_count)
 
         if status == STATUS_AGGREGATE:
+            aggregates = []
             label, value = _parse_aggregate(payload)
-            return QueryResult(ok=True, columns=[label], rows=[[value]], row_count=1)
+            aggregates.append((label, value))
+            while flag == FLAG_MORE:
+                status, flag, payload = _recv_packet(self._sock)
+                if status == STATUS_AGGREGATE:
+                    label, value = _parse_aggregate(payload)
+                    aggregates.append((label, value))
+            columns = [a[0] for a in aggregates]
+            rows = [[a[1] for a in aggregates]]
+            return QueryResult(ok=True, columns=columns, rows=rows, row_count=1)
 
         return QueryResult(ok=False, error=f"Unexpected status code: {status}")

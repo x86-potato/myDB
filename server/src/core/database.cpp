@@ -39,8 +39,7 @@ int Database::insert_table(Table& table, int txn_id)
     }
 
     off_t result = file->insert_table<Node32, Node16, Node8, Node4>(table, txn_id);
-    tableMap.insert({table.name, table});
-    return 0;
+    return result;
 }
 
 const Table& Database::get_table(const std::string& tableName) const
@@ -184,7 +183,7 @@ int Database::insert(const std::string& tableName, const StringVec& args, int tx
     return 0;
 }
 
-int Database::erase(const std::string& tableName, Plan& plan, Transaction* txn)
+int Database::erase(LogicalPlan& plan, Transaction* txn)
 {
 
     if (plan.paths.size() == 0) return 1;
@@ -236,8 +235,6 @@ int Database::create_transaction()
 void Database::rollback_transaction(int txn_id)
 {
     std::lock_guard<std::mutex> lock(txn_mutex);
-    // Erasing calls ~Transaction() which calls rollback(),
-    // releasing all owner_mutex and rw_latch locks held by this transaction.
     transactions.erase(txn_id);
 }
 

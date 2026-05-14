@@ -2,7 +2,7 @@
 #include "file.hpp"
 
 
-void PostingList::lock_and_insert(off_t location)
+void PostingList::lock_and_insert(off_t /*location*/)
 {
     seeker_block = reinterpret_cast<Posting_Block*>(file->cache.read_block(root_location));
     seeker_location = root_location;

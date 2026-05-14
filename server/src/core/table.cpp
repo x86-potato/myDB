@@ -210,13 +210,13 @@ std::vector<std::byte> cast_to_bytes(Table *table)
 
     // push current record block location
     std::byte *recordBlockParser = reinterpret_cast<std::byte*>(&table->current_record_block_location);
-    for (int i = 0; i < sizeof(table->current_record_block_location); i++)
+    for (size_t i = 0; i < sizeof(table->current_record_block_location); i++)
         output.push_back(recordBlockParser[i]);
     output.push_back(delimiter);
 
     // push row count
     std::byte *rowCountParser = reinterpret_cast<std::byte*>(&table->row_count);
-    for (int i = 0; i < sizeof(table->row_count); i++)
+    for (size_t i = 0; i < sizeof(table->row_count); i++)
         output.push_back(rowCountParser[i]);
     output.push_back(delimiter);
 

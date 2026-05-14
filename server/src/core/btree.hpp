@@ -100,11 +100,11 @@ public:
         std::vector<off_t>& path_stack);
 
     //@brief deletes a key and its value
-    int delete_key(
-        std::string delete_string,
-        off_t record_location,
-        Column& column,
-        Transaction& txn);
+    // int delete_key(
+    //     std::string delete_string,
+    //     off_t record_location,
+    //     Column& column,
+    //     Transaction& txn);
 
 
     LocationData<LeafNodeType> locate_exact(
@@ -165,7 +165,7 @@ private:
         Transaction& txn, Column& column, std::vector<off_t>& path_stack);
     void split_internal(NodeT* node, Transaction& txn, Column& column,
         std::vector<off_t>& path_stack);
-    void insert_key_into_node(Insert_Up_Data data, NodeT* node, Transaction& txn);
+    void insert_key_into_node(Insert_Up_Data data, NodeT* node);
     void push_into_internal(InternalNodeT* target, char* value, Transaction& txn);
 
     //----------utill functions----------------
@@ -174,9 +174,7 @@ private:
     off_t get_next_node_pointer(char* to_insert, InternalNodeT *node);
     int get_first_key_index_gte(char* to_locate, LeafNodeT* node);
     off_t get_next_leftmost_node_pointer(char* to_search,InternalNodeT *node);
-    int find_left_node_child_index(NodeT *node, Transaction& txn);
-    void print_recursive(NodeT* node, int depth, std::ostream& out);
-    int get_underflow_amount();
+    // int get_underflow_amount();
     int leaf_lower_bound(NodeT* leaf, const std::string &key);
     int leaf_contains(NodeT* leaf, const std::string &key);
     off_t search_recursive(char* search_key, InternalNodeT* node);

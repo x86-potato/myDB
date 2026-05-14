@@ -1,4 +1,4 @@
-#include "builder.hpp"
+#include "physical.hpp"
 #include "../../server/session.hpp"
 #include <iomanip>
 #include <iterator>
@@ -326,66 +326,85 @@ void PhysicalPlan::run_aggregate(const AST::SelectQuery* query, Session* session
 {
     bool send_packets = (session != nullptr && !session->is_admin());
 
-    std::string tname = query->aggregate_column.table.empty()
-        ? path_.tables[0]
-        : query->aggregate_column.table;
+    struct AggState {
+        long long value   = 0;
+        bool      has_rows = false;
+        int       col_idx  = -1;
+        std::string tname;
+    };
 
-    int col_idx = -1;
-    if (query->aggregate != AST::AggregateType::COUNT)
-        col_idx = database_.get_table(tname).get_column_index(query->aggregate_column.column);
+    const size_t n = query->aggregates.size();
+    std::vector<AggState> states(n);
+
+    for (size_t i = 0; i < n; i++)
+    {
+        const auto& agg = query->aggregates[i];
+        states[i].tname = agg.column.table.empty() ? path_.tables[0] : agg.column.table;
+        if (agg.type != AST::AggregateType::COUNT)
+            states[i].col_idx = database_.get_table(states[i].tname)
+                                         .get_column_index(agg.column.column);
+    }
 
     Output output;
-    long long count   = 0;
-    long long agg_val = 0;
-    bool has_rows     = false;
+    long long row_count = 0;
 
     while (root->next(output))
     {
-        count++;
-        if (query->aggregate != AST::AggregateType::COUNT)
+        row_count++;
+        for (size_t i = 0; i < n; i++)
         {
+            const auto& agg = query->aggregates[i];
+            if (agg.type == AST::AggregateType::COUNT) continue;
+            AggState& st = states[i];
             for (const auto& tuple : output.tuples_)
             {
-                if (tuple.table_->name != tname) continue;
-                long long val = std::stoll(tuple.record.get_token(col_idx, *tuple.table_));
-                switch (query->aggregate)
+                if (tuple.table_->name != st.tname) continue;
+                long long val = std::stoll(tuple.record.get_token(st.col_idx, *tuple.table_));
+                switch (agg.type)
                 {
-                    case AST::AggregateType::SUM: agg_val += val; break;
-                    case AST::AggregateType::MAX: if (!has_rows || val > agg_val) agg_val = val; break;
-                    case AST::AggregateType::MIN: if (!has_rows || val < agg_val) agg_val = val; break;
+                    case AST::AggregateType::SUM: st.value += val; break;
+                    case AST::AggregateType::MAX: if (!st.has_rows || val > st.value) st.value = val; break;
+                    case AST::AggregateType::MIN: if (!st.has_rows || val < st.value) st.value = val; break;
                     default: break;
                 }
-                has_rows = true;
+                st.has_rows = true;
                 break;
             }
         }
-        if (query->limit > 0 && count >= query->limit) break;
+        if (query->limit > 0 && row_count >= query->limit) break;
     }
 
-    long long result;
-    std::string label;
-    AggregateKind kind;
-
-    switch (query->aggregate)
+    for (size_t i = 0; i < n; i++)
     {
-        case AST::AggregateType::COUNT:
-            result = count; label = "count(*)"; kind = AggregateKind::COUNT; break;
-        case AST::AggregateType::SUM:
-            result = agg_val; label = "sum(" + query->aggregate_column.column + ")"; kind = AggregateKind::SUM; break;
-        case AST::AggregateType::MAX:
-            result = agg_val; label = "max(" + query->aggregate_column.column + ")"; kind = AggregateKind::MAX; break;
-        case AST::AggregateType::MIN:
-            result = agg_val; label = "min(" + query->aggregate_column.column + ")"; kind = AggregateKind::MIN; break;
-        default:
-            result = 0; label = "?"; kind = AggregateKind::COUNT; break;
+        const auto& agg  = query->aggregates[i];
+        AggState&   st   = states[i];
+        bool        last = (i == n - 1);
+
+        long long   result;
+        std::string label;
+        AggregateKind kind;
+
+        switch (agg.type)
+        {
+            case AST::AggregateType::COUNT:
+                result = row_count; label = "count(*)"; kind = AggregateKind::COUNT; break;
+            case AST::AggregateType::SUM:
+                result = st.value; label = "sum(" + agg.column.column + ")"; kind = AggregateKind::SUM; break;
+            case AST::AggregateType::MAX:
+                result = st.value; label = "max(" + agg.column.column + ")"; kind = AggregateKind::MAX; break;
+            case AST::AggregateType::MIN:
+                result = st.value; label = "min(" + agg.column.column + ")"; kind = AggregateKind::MIN; break;
+            default:
+                result = 0; label = "?"; kind = AggregateKind::COUNT; break;
+        }
+
+        std::string result_str = std::to_string(result);
+
+        if (send_packets)
+            session->send_aggregate(kind, label, result_str, last);
+        else
+            std::cout << label << "\n" << std::string(label.size(), '-') << "\n" << result_str << "\n";
     }
-
-    std::string result_str = std::to_string(result);
-
-    if (send_packets)
-        session->send_aggregate(kind, label, result_str);
-    else
-        std::cout << label << "\n" << std::string(label.size(), '-') << "\n" << result_str << "\n";
 }
 
 // -----------------------------------------------------------------------
@@ -506,7 +525,7 @@ void PhysicalPlan::run_select_stdout(const AST::SelectQuery* query,
 
 void PhysicalPlan::run_select(const AST::SelectQuery* query, Session* session)
 {
-    if (query->aggregate != AST::AggregateType::NONE)
+    if (!query->aggregates.empty())
     {
         run_aggregate(query, session);
         return;

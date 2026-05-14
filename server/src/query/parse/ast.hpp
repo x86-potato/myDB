@@ -2,7 +2,7 @@
 #include <random>
 #include <string>
 #include <variant>
-#include "../config.h"
+#include "../../config.h"
 #include "tokens.hpp"
 #include <memory>
 #include <variant>
@@ -22,7 +22,6 @@ namespace AST
         Run,
         Show,
 
-        Switch, 
         Begin,
         Commit,
         Rollback
@@ -126,10 +125,6 @@ namespace AST
     struct ShowQuery : Query
     {
     };
-    struct SwitchQuery : Query
-    {
-        string session_id;
-    };
     struct DeleteQuery: Query
     {
         string tableName;
@@ -184,14 +179,19 @@ namespace AST
         MIN
     };
 
+    struct AggregateItem
+    {
+        AggregateType type = AggregateType::NONE;
+        SelectColumn  column; // table/column target for SUM/MAX/MIN; empty for COUNT
+    };
+
     struct SelectQuery : Query
     {
         StringVec tableNames;
         bool has_where = false;
         bool select_all = false;
         std::vector<SelectColumn> selected_columns;
-        AggregateType aggregate = AggregateType::NONE;
-        SelectColumn aggregate_column; // table/column target for SUM/MAX/MIN
+        std::vector<AggregateItem> aggregates; // one or more aggregate functions
         int limit = -1; // -1 means no limit
         Condition condition;
     };

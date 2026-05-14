@@ -16,11 +16,11 @@ public:
     Posting_Block *seeker_block;
 
     PostingList(std::string key, off_t root_location, Transaction& txn, File *file)
-    : key(key), root_location(root_location),
+    : file(file),
+    key(key), root_location(root_location),
     txn(txn),
     seeker_location(root_location),
-    seeker_block(nullptr),
-    file(file) {};
+    seeker_block(nullptr) {};
 
 
     void lock_and_insert(off_t location);

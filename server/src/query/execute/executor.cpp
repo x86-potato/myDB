@@ -39,6 +39,8 @@ void Executor::execute (const std::string &input, Session& session)
             case AST::QueryType::Rollback:
                 std::cout << "Error: Query type not allowed in admin CLI." << "\n";
                 return;
+            default:
+                break;
         }
     }
 
@@ -101,11 +103,6 @@ void Executor::execute (const std::string &input, Session& session)
                 static_cast<AST::ShowQuery*>(queryAST.get())
             );
             break;
-        case AST::QueryType::Switch:
-            execute_switch(
-                static_cast<AST::SwitchQuery*>(queryAST.get()), session
-            );
-            break;
         case AST::QueryType::Begin:
             execute_begin(
                 static_cast<AST::BeginQuery*>(queryAST.get()), session
@@ -115,6 +112,11 @@ void Executor::execute (const std::string &input, Session& session)
             execute_commit(
                 static_cast<AST::CommitQuery*>(queryAST.get()), session
             ); 
+            break;
+        case AST::QueryType::Rollback:
+            execute_rollback(
+                static_cast<AST::RollbackQuery*>(queryAST.get()), session
+            );
             break;
     }
 
@@ -133,6 +135,7 @@ void Executor::execute (const std::string &input, Session& session)
 }
 
 void Executor::execute_show(AST::ShowQuery* query) {
+    (void)query;
     if (database.tableMap.empty()) {
         std::cout << "No tables.\n";
         return;
@@ -195,7 +198,7 @@ void Executor::execute_create_index(AST::CreateIndexQuery* query) {
 void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
 
 
-    Plan plan(query->tableName, query->condition);
+    LogicalPlan plan(query->tableName, query->condition);
 
     Transaction* txn_ptr;
     {
@@ -219,43 +222,7 @@ void Executor::execute_update(AST::UpdateQuery* query, Session& session) {
     }
 }
 
-void Executor::execute_select(AST::SelectQuery* query, Session& session) {
-    //AST::print_select_query_tree(*query);
-    Transaction* txn_ptr;
-    {
-        std::lock_guard<std::mutex> lock(database.txn_mutex);
-        txn_ptr = &database.transactions.at(session.current_transaction_id);
-    }
-    Transaction& txn = *txn_ptr;
-
-    Plan plan(*query);
-    std::string error_msg;
-    if (!validateSelectQuery(*query, database, &error_msg))
-    {
-        session.send_error(error_msg);
-        return;
-    }
-    if (!validatePlan(plan, database, &error_msg))
-    {
-        session.send_error(error_msg);
-        return;
-    }
-
-
-    if(plan.paths.size() == 0)
-    {
-        Path temp = Path{};
-        PhysicalPlan plan_executor(temp, database, &txn);
-
-        plan_executor.run_select(query, &session);
-    }
-    else
-    {
-        PhysicalPlan plan_executor(plan.paths[0], database, &txn);
-
-        plan_executor.run_select(query, &session);
-    }
-}
+// defined in select.cpp
 
 void Executor::execute_load(AST::LoadQuery* query, Session& session) {
     // Debug: print current working directory
@@ -347,52 +314,14 @@ void Executor::execute_create_table(AST::CreateTableQuery* query, Session& sessi
     session.set_current_txn(-1);
 }
 
-void Executor::execute_insert(AST::InsertQuery* query, Session& session) {
-    
-    int txn_id = session.current_transaction_id;
-    if(txn_id == -1)
-    {
-        std::cout << "Error: No active transaction for insert operation." << "\n";
-        return;
-    }
-
-    if (validateInsertQuery(*query, database) == false)
-    {
-        return;
-    }
-
-
-    StringVec values;
-
-    for (auto &arg: query->args)
-    {
-        values.push_back(arg.value);
-    }
-
-    std::string tableName = query->tableName;
-
-    std::string error_message;
-    int result = database.insert(tableName, values, txn_id, &error_message);
-
-    if(result != 0)
-    {
-        if (error_message.empty()) {
-            error_message = "Insert failed for table " + tableName;
-        }
-
-        session.send_error(error_message);
-        return;
-    }
-
-    session.send_ok();
-}
+// defined in insert.cpp
 
 void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
     if (validateDeleteQuery(*query, database) == false)
     {
        return;
     }
-    Plan plan(query->tableName, query->condition);
+    LogicalPlan plan(query->tableName, query->condition);
     if (validatePlan(plan, database) == false)
     {
        return;
@@ -403,8 +332,7 @@ void Executor::execute_delete(AST::DeleteQuery* query, Session& session) {
         txn = &database.transactions.at(session.current_transaction_id);
     }
 
-    const std::string &tableName = query->tableName;
-    database.erase(tableName, plan, txn);
+    database.erase(plan, txn);
     session.send_ok();
 }
 
@@ -443,17 +371,9 @@ void Executor::execute_run(AST::RunQuery* query, Session& session) {
     }
 }
 
-void Executor::execute_switch(AST::SwitchQuery* query, Session& session) {
-    std::string session_id = query->session_id;
-
-    int session_id_int = stoi(query->session_id);
-    // For demonstration, we'll just print the session switch action.
-    // In a real implementation, this would involve more complex session management logic.
-    std::cout << "Switching to session: " << session_id_int << "\n";
-
-}
 
 void Executor::execute_begin(AST::BeginQuery* query, Session& session) {
+        (void)query;
     int txn_id = database.create_transaction();
     std::cout << "Transaction " << txn_id << " started." << "\n";
 
@@ -463,7 +383,9 @@ void Executor::execute_begin(AST::BeginQuery* query, Session& session) {
 
 }
 
-void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
+void Executor::execute_commit(AST::CommitQuery* query,Session& session) {
+    (void)query;
+
     int txn_id = session.current_transaction_id;
 
     if(txn_id == -1)
@@ -483,6 +405,26 @@ void Executor::execute_commit(AST::CommitQuery* query, Session& session) {
 
     //std::cout << "Transaction " << txn_id << " committed successfully." << "\n";
     session.set_current_txn(-1);
+
+    session.send_ok();
+}
+
+
+void Executor::execute_rollback(AST::RollbackQuery* query, Session& session) {
+    (void)query; 
+
+    int txn_id = session.current_transaction_id;
+
+    if(txn_id == -1)
+    {
+        std::cout << "Error: No active transaction to roll back." << "\n";
+        return;
+    }
+
+    database.rollback_transaction(txn_id);
+    session.set_current_txn(-1);
+
+    std::cout << "Transaction " << txn_id << " rolled back successfully." << "\n";
 
     session.send_ok();
 }

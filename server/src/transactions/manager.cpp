@@ -3,6 +3,7 @@
 
 void LockManager::acquire_shared(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     cache.read_block(page_location);
 
     NodeLRU* node;
@@ -16,6 +17,7 @@ void LockManager::acquire_shared(int txn_id, off_t page_location)
 
 void LockManager::acquire_ownership(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     NodeLRU* node;
     {
         std::lock_guard<std::mutex> lock(cache.cache_lock);
@@ -27,6 +29,7 @@ void LockManager::acquire_ownership(int txn_id, off_t page_location)
 
 void LockManager::acquire_exclusive(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     NodeLRU* node;
     {
         std::lock_guard<std::mutex> lock(cache.cache_lock);
@@ -38,6 +41,7 @@ void LockManager::acquire_exclusive(int txn_id, off_t page_location)
 
 void LockManager::release_exclusive(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     NodeLRU* node;
     {
         std::lock_guard<std::mutex> lock(cache.cache_lock);
@@ -49,6 +53,7 @@ void LockManager::release_exclusive(int txn_id, off_t page_location)
 
 void LockManager::release_shared(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     NodeLRU* node;
     {
         std::lock_guard<std::mutex> lock(cache.cache_lock);
@@ -60,6 +65,7 @@ void LockManager::release_shared(int txn_id, off_t page_location)
 
 void LockManager::release_ownership(int txn_id, off_t page_location)
 {
+    (void)txn_id;
     NodeLRU* node;
     {
         std::lock_guard<std::mutex> lock(cache.cache_lock);

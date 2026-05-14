@@ -159,42 +159,35 @@ void Session::send_row(std::vector<OutputTuple> &tuples, bool last_packet)
     write(client_fd, buf.data(), buf.size());
 }
 
+void Session::send_affected(int count)
+{
+    (void)count;
+}
+
 void Session::send_metadata(const std::vector<TableDescriptor>& descriptors, bool more_packets)
 {
-    std::vector<uint8_t> payload;
-    payload.push_back(static_cast<uint8_t>(StatusCode::METADATA));
-    payload.push_back(static_cast<uint8_t>(more_packets ? PacketFlag::MORE_PACKETS : PacketFlag::LAST_PACKET));
-    size_t payload_length_pos = payload.size();
-    int final_payload_length = 0;
-    push_u32(payload, 0); // placeholder
+    std::vector<uint8_t> buf;
+    buf.reserve(128);
 
-    final_payload_length += 4;
-    push_u32(payload, static_cast<uint32_t>(descriptors.size()));
+    buf.push_back(static_cast<uint8_t>(StatusCode::METADATA));
+    buf.push_back(static_cast<uint8_t>(more_packets ? PacketFlag::MORE_PACKETS : PacketFlag::LAST_PACKET));
+    push_u32(buf, 0); // payload length placeholder
 
-    for (const auto& td : descriptors)
-    {
-        final_payload_length += 4 + static_cast<int>(td.name.length());
-        push_u32(payload, td.name.length());
-        push_str(payload, td.name);
-
-        final_payload_length += 4;
-        push_u32(payload, static_cast<uint32_t>(td.columns.size()));
-
-        for (const auto& col : td.columns)
-        {
-            final_payload_length += 4 + static_cast<int>(col.name.length()) + 1;
-            push_u32(payload, col.name.length());
-            push_str(payload, col.name);
-            payload.push_back(static_cast<uint8_t>(col.type));
+    push_u32(buf, static_cast<uint32_t>(descriptors.size()));
+    for (const auto& td : descriptors) {
+        push_u32(buf, static_cast<uint32_t>(td.name.size()));
+        push_str(buf, td.name);
+        push_u32(buf, static_cast<uint32_t>(td.columns.size()));
+        for (const auto& col : td.columns) {
+            push_u32(buf, static_cast<uint32_t>(col.name.size()));
+            push_str(buf, col.name);
+            buf.push_back(static_cast<uint8_t>(col.type));
         }
     }
 
-    payload[payload_length_pos]     =  final_payload_length        & 0xFF;
-    payload[payload_length_pos + 1] = (final_payload_length >>  8) & 0xFF;
-    payload[payload_length_pos + 2] = (final_payload_length >> 16) & 0xFF;
-    payload[payload_length_pos + 3] = (final_payload_length >> 24) & 0xFF;
-
-    write(client_fd, payload.data(), payload.size());
+    uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
+    memcpy(buf.data() + 2, &payload_len, 4);
+    write(client_fd, buf.data(), buf.size());
 }
 
 void Session::send_row_values(const std::vector<std::string>& values, bool last_packet)
@@ -208,25 +201,23 @@ void Session::send_row_values(const std::vector<std::string>& values, bool last_
     push_u32(buf, 0); // payload length placeholder
 
     push_u32(buf, static_cast<uint32_t>(values.size()));
-    for (const auto& val : values)
-    {
-        push_u32(buf, static_cast<uint32_t>(val.length()));
-        push_str(buf, val);
+    for (const auto& v : values) {
+        push_u32(buf, static_cast<uint32_t>(v.size()));
+        push_str(buf, v);
     }
 
     uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
     memcpy(buf.data() + 2, &payload_len, 4);
-
     write(client_fd, buf.data(), buf.size());
 }
 
-void Session::send_aggregate(AggregateKind kind, const std::string& label, const std::string& value)
+void Session::send_aggregate(AggregateKind kind, const std::string& label, const std::string& value, bool last_packet)
 {
     std::vector<uint8_t> buf;
-    buf.reserve(32);
+    buf.reserve(64);
 
     buf.push_back(static_cast<uint8_t>(StatusCode::AGGREGATE));
-    buf.push_back(static_cast<uint8_t>(PacketFlag::LAST_PACKET));
+    buf.push_back(static_cast<uint8_t>(last_packet ? PacketFlag::LAST_PACKET : PacketFlag::MORE_PACKETS));
     push_u32(buf, 0); // payload length placeholder
 
     buf.push_back(static_cast<uint8_t>(kind));
@@ -237,14 +228,11 @@ void Session::send_aggregate(AggregateKind kind, const std::string& label, const
 
     uint32_t payload_len = static_cast<uint32_t>(buf.size() - 6);
     memcpy(buf.data() + 2, &payload_len, 4);
-
     write(client_fd, buf.data(), buf.size());
 }
 
-void Session::send_affected(int count)
-{}
-
 void Session::close_session(Server &server) {
+    (void)server;
     if(client_fd != -1) {
         shutdown(client_fd, SHUT_RDWR);
         close(client_fd);
@@ -302,7 +290,7 @@ static void run_bench(Executor& executor, int n_tables, int inserts_per_table)
 
     std::atomic<bool> stop{false};
 
-    auto make_query = [](const std::string& tbl, int cols, unsigned int seed) -> std::string {
+    auto make_query = [](const std::string& tbl, int /*cols*/, unsigned int seed) -> std::string {
         if (tbl == "users") {
             unsigned int uid = seed % 1'999'000'000u + 1u;
             return "insert into users (" + std::to_string(uid)

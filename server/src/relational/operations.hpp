@@ -8,7 +8,7 @@
 #include "../core/table.hpp"
 #include "../core/database.hpp"
 #include "../config.h"
-#include "../query/plan/planner.hpp"
+#include "../query/plan/logical.hpp"
 //parent class of al relational operations
 
 class Database;
@@ -95,9 +95,9 @@ public:
 private:
     Database& database_;
     const Table& table_;
+    const Predicate* pred_;
     Transaction* txn;
 
-    const Predicate* pred_;
     Key index_key_;
     bool skipped_ = false;
     bool started = false;

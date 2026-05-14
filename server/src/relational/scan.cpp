@@ -35,8 +35,6 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate, Tr
         std::string indexedColumnName = std::get<ColumnOperand>(pred_->left).column;
         std::string key = std::get<LiteralOperand>(pred_->right).literal;
 
-        off_t index_location = table.get_column(indexedColumnName).indexLocation;
-        
         index_key_ = make_index_key(strip_quotes(key),
                                      table.get_column(indexedColumnName).type);
         switch (table.get_column(indexedColumnName).type)
@@ -81,7 +79,6 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate, Tr
     else if (mode_ == ScanMode::FULL_SCAN)
     {
         //get primary index location
-        off_t index_location = table.get_column(0).indexLocation;
         switch (table.get_column(0).type)
         {
             case Type::CHAR32:
@@ -328,10 +325,6 @@ bool Scan::next(Output& output)
             }
         }
     }
-    else if (posting_block_index_ != -1)
-    {
-        //continue iterating posting list
-    }
     else if (!skipped_ && mode_ != ScanMode::SECONDARY_INDEX_SCAN && !is_inner_)
     {
         if (!cursor_->next())
@@ -431,4 +424,6 @@ bool Scan::next(Output& output)
         });
         return true;
     }
+
+    return false;
 }

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../storage/file.hpp"
 #include "transaction.hpp"
 #include <cstddef>
@@ -8,7 +10,7 @@ public:
 
     // 2. Main Constructor
     SharedPageGuard(off_t page_location, Transaction& txn) 
-        : page_location(page_location), txn(&txn) 
+        : txn(&txn), page_location(page_location), page(nullptr)
     {
         this->txn->acquire_shared(page_location);
 

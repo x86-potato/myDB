@@ -7,7 +7,7 @@
 #include <variant>
 #include "../../transactions/transaction.hpp"
 #include "../../server/response.hpp"
-#include "planner.hpp"
+#include "logical.hpp"
 
 class Operator;
 class Filter;
@@ -49,6 +49,7 @@ private:
 
     std::vector<ColMapping> build_col_map(const AST::SelectQuery* query) const;
     void run_aggregate(const AST::SelectQuery* query, Session* session);
+    void run_mixed(const AST::SelectQuery* query, Session* session);
     void run_select_packets(const AST::SelectQuery* query,
                             const std::vector<ColMapping>& col_map,
                             Session* session);

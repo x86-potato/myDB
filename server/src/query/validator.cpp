@@ -200,7 +200,7 @@ bool validateSelectQuery(const AST::SelectQuery &query, const Database &db, std:
     }
 
     // 2. Column list / aggregate column validation
-    if (!query.select_all && query.aggregate == AST::AggregateType::NONE)
+    if (!query.select_all && query.aggregates.empty())
     {
         if (query.selected_columns.empty())
         {
@@ -234,42 +234,48 @@ bool validateSelectQuery(const AST::SelectQuery &query, const Database &db, std:
             }
         }
     }
-    else if (query.aggregate == AST::AggregateType::SUM ||
-             query.aggregate == AST::AggregateType::MAX ||
-             query.aggregate == AST::AggregateType::MIN)
+    else
     {
-        const auto& sc = query.aggregate_column;
-        std::string tname = sc.table.empty() ? query.tableNames[0] : sc.table;
-
-        bool in_from = false;
-        for (const auto& t : query.tableNames)
-            if (t == tname) { in_from = true; break; }
-        if (!in_from)
+        for (const auto& item : query.aggregates)
         {
-            std::string msg = "Table '" + tname + "' in aggregate is not in FROM clause";
-            if (out_error) *out_error = msg;
-            throwError(msg.c_str());
-            return false;
-        }
-
-        const Table& tbl = db.tableMap.at(tname);
-        if (!checkIfTableContainsColumn(tbl, sc.column))
-        {
-            std::string msg = "Column '" + sc.column + "' does not exist in table '" + tname + "'";
-            if (out_error) *out_error = msg;
-            throwError(msg.c_str());
-            return false;
-        }
-
-        // SUM/MAX/MIN require an INTEGER column
-        for (const auto& col : tbl.columns)
-        {
-            if (col.name == sc.column && col.type != Type::INTEGER)
+            if (item.type == AST::AggregateType::SUM ||
+                item.type == AST::AggregateType::MAX ||
+                item.type == AST::AggregateType::MIN)
             {
-                std::string msg = "SUM/MAX/MIN require an INTEGER column, '" + sc.column + "' is not";
-                if (out_error) *out_error = msg;
-                throwError(msg.c_str());
-                return false;
+                const auto& sc = item.column;
+                std::string tname = sc.table.empty() ? query.tableNames[0] : sc.table;
+
+                bool in_from = false;
+                for (const auto& t : query.tableNames)
+                    if (t == tname) { in_from = true; break; }
+                if (!in_from)
+                {
+                    std::string msg = "Table '" + tname + "' in aggregate is not in FROM clause";
+                    if (out_error) *out_error = msg;
+                    throwError(msg.c_str());
+                    return false;
+                }
+
+                const Table& tbl = db.tableMap.at(tname);
+                if (!checkIfTableContainsColumn(tbl, sc.column))
+                {
+                    std::string msg = "Column '" + sc.column + "' does not exist in table '" + tname + "'";
+                    if (out_error) *out_error = msg;
+                    throwError(msg.c_str());
+                    return false;
+                }
+
+                // SUM/MAX/MIN require an INTEGER column
+                for (const auto& col : tbl.columns)
+                {
+                    if (col.name == sc.column && col.type != Type::INTEGER)
+                    {
+                        std::string msg = "SUM/MAX/MIN require an INTEGER column, '" + sc.column + "' is not";
+                        if (out_error) *out_error = msg;
+                        throwError(msg.c_str());
+                        return false;
+                    }
+                }
             }
         }
     }
@@ -287,7 +293,7 @@ bool validateSelectQuery(const AST::SelectQuery &query, const Database &db, std:
 }
 
 //first we only
-bool validatePlan(const Plan& plan, const Database &db, std::string* out_error)
+bool validatePlan(const LogicalPlan& plan, const Database &db, std::string* out_error)
 {
     for (auto &path: plan.paths)
     {

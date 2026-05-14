@@ -1,6 +1,6 @@
 #pragma once
 #include "../config.h"
-#include "../query/plan/planner.hpp"
+#include "../query/plan/logical.hpp"
 #include "../core/cache.hpp"
 #include <unordered_set>
 #include "manager.hpp"
@@ -10,10 +10,9 @@ class WAL;
 class Transaction {
 private:
     std::unordered_map<off_t, Page> pages;
-    LockManager &lock_manager;
-
 
 public:
+    LockManager &lock_manager;
     Cache& cache;
     size_t txn_id;
     WAL &wal;
@@ -34,7 +33,7 @@ public:
     //@On roll back, nothing happnes to them.
     std::vector<off_t> freed_blocks;
 
-    Transaction(int txn_id, Cache& cache, LockManager &lock_manager, WAL &wal) : txn_id(txn_id), cache(cache), lock_manager(lock_manager), wal(wal) {};
+    Transaction(int txn_id, Cache& cache, LockManager &lock_manager, WAL &wal) : lock_manager(lock_manager), cache(cache), txn_id(txn_id), wal(wal) {};
 
     // RAII: if the transaction was never committed (session crash, exception),
     // the destructor rolls back automatically, releasing all held locks.

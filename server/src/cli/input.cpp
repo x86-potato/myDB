@@ -7,6 +7,7 @@ CLI::CLI(Executor& executor) : executor_(executor) {}
 
 void CLI::run(Server& server) {
     std::string line;
+    (void)server;
     
     // 1. THE INITIAL PROMPT: Print this before the loop ever starts
     std::cout << "db> ";

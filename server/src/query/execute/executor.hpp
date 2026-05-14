@@ -3,16 +3,16 @@
 #include <cassert>
 #include <chrono>
 
-#include "../core/database.hpp"
-#include "../core/cursor.hpp"
-#include "plan/builder.hpp"
-#include "tokens.hpp"
-#include "ast.hpp"
-#include "lexer.hpp"
-#include "parser.hpp"
-#include "validator.hpp"
-#include "plan/planner.hpp"
-#include "../server/server.hpp"
+#include "../../core/database.hpp"
+#include "../../core/cursor.hpp"
+#include "../plan/physical.hpp"
+#include "../parse/tokens.hpp"
+#include "../parse/ast.hpp"
+#include "../parse/lexer.hpp"
+#include "../parse/parser.hpp"
+#include "../validator.hpp"
+#include "../plan/logical.hpp"
+#include "../../server/server.hpp"
 
 
 class Server;
@@ -38,7 +38,6 @@ public:
     void execute_create_index(AST::CreateIndexQuery* query);
     void execute_show(AST::ShowQuery* query);
 
-    void execute_switch(AST::SwitchQuery* query, Session& session);
     void execute_begin(AST::BeginQuery* query, Session& session);
     void execute_commit(AST::CommitQuery* query, Session& session);
     void execute_rollback(AST::RollbackQuery* query, Session& session);

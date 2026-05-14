@@ -56,6 +56,7 @@ int Transaction::copy_page_no_lock(off_t page_location) {
 
     cache.cache_lock.lock(); // Lock the cache to ensure thread safety while accessing the page
     NodeLRU* node = cache.lru.page_to_node[page_location];
+    (void)node;
     cache.cache_lock.unlock(); // Unlock the cache after accessing the page
 
     //node->rw_latch.lock(); // Lock the page for exclusive access

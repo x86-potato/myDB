@@ -1,11 +1,11 @@
 #pragma once
 #include "../config.h"
 #include "btree.hpp"
-#include "../query/ast.hpp"
+#include "../query/parse/ast.hpp"
 #include "../storage/record.hpp"
-#include "../query/plan/planner.hpp"
+#include "../query/plan/logical.hpp"
 #include "../query/validator.hpp"
-#include "../query/plan/builder.hpp"
+#include "../query/plan/physical.hpp"
 #include "../transactions/transaction.hpp"
 #include "../wal/wal.hpp"
 #include <arpa/inet.h>
@@ -53,7 +53,7 @@ public:
     void update_index_location(Table &table, int column_index, off_t new_index_location, Transaction& txn);
     void update_root_pointer(Table &table, off_t old_root, off_t new_root);
     int insert(const std::string& tableName, const StringVec& args, int txn_id, std::string* error_message = nullptr);
-    int erase(const std::string& tableName, Plan &plan, Transaction* txn);
+    int erase(LogicalPlan &plan, Transaction* txn);
 
     //@returns a new transaction id
     int create_transaction();

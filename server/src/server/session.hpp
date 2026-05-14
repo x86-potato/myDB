@@ -50,7 +50,7 @@ struct Session {
     void send_metadata(const std::vector<TableDescriptor>& descriptors, bool more_packets);
     void send_row(std::vector<OutputTuple>& tuples, bool last_packet);
     void send_row_values(const std::vector<std::string>& values, bool last_packet);
-    void send_aggregate(AggregateKind kind, const std::string& label, const std::string& value);
+    void send_aggregate(AggregateKind kind, const std::string& label, const std::string& value, bool last_packet = true);
     void send_affected(int count);
 
     void close_session(Server &server);

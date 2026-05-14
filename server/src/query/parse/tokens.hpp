@@ -173,6 +173,12 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::SEMICOLON:              return "SEMICOLON";
         case TokenType::COMMA:                  return "COMMA";
         case TokenType::PERIOD:                 return "PERIOD";
+        case TokenType::KW_COUNT:               return "KW_COUNT";
+        case TokenType::KW_LIMIT:               return "KW_LIMIT";
+        case TokenType::KW_SUM:                 return "KW_SUM";
+        case TokenType::KW_MAX:                 return "KW_MAX";
+        case TokenType::KW_MIN:                 return "KW_MIN";
+        case TokenType::KW_VALUES:              return "KW_VALUES";
     }
     return "UNKNOWN";
 }

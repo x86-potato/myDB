@@ -1,5 +1,6 @@
 #include "file.hpp"
 #include "../core/database.hpp"
+#include "../transactions/reader.hpp"
 #include <algorithm>
 
 namespace {
@@ -68,8 +69,6 @@ off_t File::insert_primary_index(
     std::string key, Record &record, MyBtree &tree, Table &table, Transaction& txn)
 {
 
-    using NodeT = typename MyBtree::NodeType;
-
     //here we would lock it as parent lock
     off_t root_location = table.columns[0].indexLocation;
 
@@ -103,7 +102,7 @@ off_t File::insert_primary_index(
 
 template <typename MyBtree>
 void File::insert_secondary_index(
-    std::string key, Table &table, MyBtree &tree, off_t record_location, int column_index, int txn_id)
+    std::string /*key*/, Table& /*table*/, MyBtree& /*tree*/, off_t /*record_location*/, int /*column_index*/, int /*txn_id*/)
 {
     // Transaction& txn = database->transactions.at(txn_id);
     // using NodeT = typename MyBtree::NodeType;
@@ -339,17 +338,9 @@ void File::generate_index(int columnIndex, Table& table,
 
 
 template<typename MyBtree, typename NodeT, typename InternalNodeT, typename LeafNodeT>
-std::vector<Record> File::find(std::string key, MyBtree &index_tree, off_t root_location, Table &table)
+std::vector<Record> File::find(std::string /*key*/, MyBtree& /*index_tree*/, off_t /*root_location*/, Table& /*table*/)
 {
-    // std::vector<Record> output;
-    // index_tree.tree_root = root_location;
-    // std::vector<off_t> locations = index_tree.search(key);
-
-    // for (auto &location: locations)
-    //     output.push_back(get_record(location, table));
-
-
-    // return output;
+    return {};
 }
 
 
@@ -850,7 +841,7 @@ void File::init_node(off_t location, Transaction& txn)
     File::update_node(&node, location, sizeof(NodeT), txn);
 
 }
-void File::init_data_node(off_t location, int txn_id)
+void File::init_data_node(off_t location, int /*txn_id*/)
 {
     Data_Node data;
     data.location = location;
@@ -977,26 +968,22 @@ int File::open_file()
 // @brief returns record located at an offset
 Record File::get_record(off_t record_location, const Table& table, Transaction* txn)
 {
-
     off_t page_offset = (record_location/BLOCK_SIZE) * BLOCK_SIZE;
     off_t record_offset = record_location % BLOCK_SIZE;
+    assert(txn != nullptr);
 
     if(txn != nullptr)
     {
         Page* page = txn->private_cache_read(page_offset);
-
         if(page != nullptr)
             return Record(page->buffer + record_offset, table);
+
+        SharedPageGuard guard(page_offset, *txn);
+        return Record(guard.get()->buffer + record_offset, table);
     }
 
     Page* page = cache.read_block(page_offset);
-
-
-    Record record(page->buffer + record_offset, table);
-
-
-    return record;
-
+    return Record(page->buffer + record_offset, table);
 }
 
 // @brief returns location of the new record
@@ -1091,78 +1078,12 @@ off_t new_block_location = alloc_block();
 }
 
 //@breif updates a record at a given location and column with a new value
-int File::update_record(Record &original_record,off_t location, int column_index, std::string& value, Table* table, int txn_id)
+int File::update_record(Record& /*original_record*/, off_t /*location*/, int /*column_index*/, std::string& /*value*/, Table* /*table*/, int /*txn_id*/)
 {
-    // Transaction& txn = database->transactions.at(txn_id);
-    // //first check if the column had been idnexed
-    // bool indexed = (table->columns[column_index].indexLocation != -1);
-
-
-
-    // off_t block_address = (location / BLOCK_SIZE) * BLOCK_SIZE;
-
-    // Page* page = cache.read_block(block_address);
-
-
-    // switch (table->columns[column_index].type)
-    // {
-    //     case Type::INTEGER:
-    //     {
-    //         if(indexed)
-    //         {
-    //             uint32_t old_value = std::stoi(original_record.get_token(column_index, *table));
-    //             uint32_t big_endian_old = htonl(old_value);
-    //             std::string old_key(reinterpret_cast<const char*>(&big_endian_old), 4);
-
-    //             uint32_t new_value = std::stoi(value);
-    //             uint32_t big_endian_new = htonl(new_value);
-    //             std::string new_key(reinterpret_cast<const char*>(&big_endian_new), 4);
-
-    //             database->index_tree4.table = table;
-
-    //             //delete old key
-    //             if (database->index_tree4.delete_key(old_key, location, table->columns[column_index], txn) != 0) {
-    //                 return -1;
-    //             }
-
-    //             //insert new key
-    //             database->index_tree4.insert(new_key, location, table->columns[column_index], txn);
-    //         }
-
-
-    //         int32_t big_endian_new = std::stoi(value);
-    //         big_endian_new = htonl(big_endian_new);
-    //         original_record.update_column(column_index, value, *table);
-    //         value.append(reinterpret_cast<const char*>(&big_endian_new), sizeof(big_endian_new));
-
-
-    //         //write in line, as the record size is not changing
-    //         cache.write_to_page(page, (location%BLOCK_SIZE), original_record.str.data(), original_record.length, block_address);
-    //         break;
-    //     }
-    //     case Type::CHAR32:
-    //     case Type::CHAR16:
-    //     case Type::CHAR8:
-    //         delete_record(original_record, location, *table, txn_id);
-    //         strip_quotes(value);
-
-    //         original_record.update_column(column_index, value, *table);
-
-    //         //database->insert(table->name, original_record.to_tokens(*table), txn_id);
-    //         break;
-
-    // }
-
-
-
-
-
-
-
-    // return location;
+    return 0;
 }
 
-int File::delete_record(const Record &record, off_t location, const Table& table, int txn_id)
+int File::delete_record(const Record& /*record*/, off_t /*location*/, const Table& /*table*/, int /*txn_id*/)
 {
     //first we clear out the secondary keys it may have
 

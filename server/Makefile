@@ -1,7 +1,7 @@
 CC = g++
 
 STD = -std=c++17
-WARN = -w
+WARN = -Wall -Wextra -Werror
 
 # Always on
 BASE = $(STD) $(WARN)
