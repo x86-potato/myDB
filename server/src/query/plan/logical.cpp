@@ -1,8 +1,8 @@
-#include "planner.hpp"
+#include "logical.hpp"
 #include <cassert>
 
 
-Plan::Plan(const AST::SelectQuery& query)
+LogicalPlan::LogicalPlan(const AST::SelectQuery& query)
 {
     //TODO: multi table join later
 
@@ -15,21 +15,21 @@ Plan::Plan(const AST::SelectQuery& query)
     }
 
     paths.push_back(Path{.tables = query.tableNames, .predicates = {},}); // start with one path
-    build_paths(query.condition.root.get(), paths);
+    decompose_condition(query.condition.root.get(), paths);
 }
 
-Plan::Plan(const std::string &tableName, const AST::Condition &query)
+LogicalPlan::LogicalPlan(const std::string &tableName, const AST::Condition &query)
 {
     if(!query.root)
     {
-        std::cerr << "Error: Invalid condition expression." << std::endl;
+        std::cerr << "Error: Invalid condition expression." << "\n";
         return;
     }
     paths.push_back(Path{.tables = {tableName}, .predicates = {},}); // start with one path
-    build_paths(query.root.get(), paths);
+    decompose_condition(query.root.get(), paths);
 }
 
-void Plan::build_paths(AST::Expr* expr, Paths& paths)
+void LogicalPlan::decompose_condition(AST::Expr* expr, Paths& paths)
 {
     if (!expr) return;
 
@@ -41,8 +41,8 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
 
         if (node.op == AST::Op::AND)
         {
-            build_paths(node.left.get(), paths);
-            build_paths(node.right.get(), paths);
+            decompose_condition(node.left.get(), paths);
+            decompose_condition(node.right.get(), paths);
             return;
         }
 
@@ -51,8 +51,8 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
             Paths left_paths = paths;
             Paths right_paths = paths;
 
-            build_paths(node.left.get(), left_paths);
-            build_paths(node.right.get(), right_paths);
+            decompose_condition(node.left.get(), left_paths);
+            decompose_condition(node.right.get(), right_paths);
 
             paths.clear();
             paths.insert(paths.end(), left_paths.begin(), left_paths.end());
@@ -60,7 +60,7 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
             return;
         }
 
-        Predicate p = make_predicate(expr);
+        Predicate p = extract_predicate(expr);
         for (auto& path : paths)
         {
             path.predicates.push_back(p);
@@ -69,7 +69,7 @@ void Plan::build_paths(AST::Expr* expr, Paths& paths)
     }
 }
 
-Predicate Plan::make_predicate(AST::Expr* expr)
+Predicate LogicalPlan::extract_predicate(AST::Expr* expr)
 {
     auto logicalPtr = std::get_if<std::unique_ptr<AST::LogicalExpr>>(expr);
     if (!logicalPtr || !*logicalPtr)
@@ -132,7 +132,7 @@ Predicate Plan::make_predicate(AST::Expr* expr)
 
     throw std::runtime_error("Predicate maker failed");
 }
-void Plan::debug_print_predicate(const Predicate& p)
+void LogicalPlan::debug_print_predicate(const Predicate& p)
 {
     struct OperandPrinter {
         void operator()(const ColumnOperand& op) const {
@@ -151,7 +151,7 @@ void Plan::debug_print_predicate(const Predicate& p)
     std::visit(OperandPrinter{}, p.right);
 }
 
-void Plan::debug_print_path(const Path& path, size_t index)
+void LogicalPlan::debug_print_path(const Path& path, size_t index)
 {
     std::cout << "Path " << index << ": ";
 
@@ -165,9 +165,9 @@ void Plan::debug_print_path(const Path& path, size_t index)
     std::cout << "\n";
 }
 
-void Plan::debug_print_plan(const Plan& plan)
+void LogicalPlan::debug_print_plan(const LogicalPlan& plan)
 {
-    std::cout << "Execution Plan\n";
+    std::cout << "Execution LogicalPlan\n";
     std::cout << "--------------\n";
 
     for (size_t i = 0; i < plan.paths.size(); ++i)
@@ -175,7 +175,7 @@ void Plan::debug_print_plan(const Plan& plan)
 }
 
 
-void Plan::execute()
+void LogicalPlan::execute()
 {
 
 }

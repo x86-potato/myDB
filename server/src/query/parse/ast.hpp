@@ -2,7 +2,7 @@
 #include <random>
 #include <string>
 #include <variant>
-#include "../config.h"
+#include "../../config.h"
 #include "tokens.hpp"
 #include <memory>
 #include <variant>
@@ -20,7 +20,11 @@ namespace AST
         Select,
         Load,
         Run,
-        Show
+        Show,
+
+        Begin,
+        Commit,
+        Rollback
     };
 
     struct Query
@@ -126,6 +130,16 @@ namespace AST
         string tableName;
         Condition condition;
     };
+    struct BeginQuery : Query
+    {
+    };
+    struct CommitQuery : Query
+    {
+    };
+    struct RollbackQuery : Query
+    {
+
+    };
 
 
     struct CreateTableQuery : Query
@@ -150,10 +164,35 @@ namespace AST
         Condition condition;
 
     };
+    struct SelectColumn
+    {
+        std::string table;   // empty when not explicitly qualified
+        std::string column;
+    };
+
+    enum class AggregateType
+    {
+        NONE,
+        COUNT,
+        SUM,
+        MAX,
+        MIN
+    };
+
+    struct AggregateItem
+    {
+        AggregateType type = AggregateType::NONE;
+        SelectColumn  column; // table/column target for SUM/MAX/MIN; empty for COUNT
+    };
+
     struct SelectQuery : Query
     {
         StringVec tableNames;
         bool has_where = false;
+        bool select_all = false;
+        std::vector<SelectColumn> selected_columns;
+        std::vector<AggregateItem> aggregates; // one or more aggregate functions
+        int limit = -1; // -1 means no limit
         Condition condition;
     };
     struct LoadQuery : Query

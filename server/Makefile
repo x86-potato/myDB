@@ -1,7 +1,7 @@
 CC = g++
 
 STD = -std=c++17
-WARN = -Wall -Wextra
+WARN = -Wall -Wextra -Werror
 
 # Always on
 BASE = $(STD) $(WARN)
@@ -13,9 +13,9 @@ DEV_FLAGS = -g -O0
 
 # Debug with sanitizers (heavy, slow)
 DBG_FLAGS = -g -O1 \
-	-fsanitize=address,undefined \
 	-fno-omit-frame-pointer \
-	-D_GLIBCXX_DEBUG
+	-D_GLIBCXX_DEBUG \
+	-fsanitize=thread
 
 # Production / benchmark build
 PROD_FLAGS = -O3 -DNDEBUG

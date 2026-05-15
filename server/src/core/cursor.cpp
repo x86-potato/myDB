@@ -10,9 +10,10 @@ inline void normalize_key(Key& k, size_t key_len) {
 
 
 template <typename TreeType>
-BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* tree)
+BPlusTreeCursor<TreeType>::BPlusTreeCursor(TreeType* tree, Transaction* txn)
 {
     this->tree = tree;
+    this->txn = txn;
 }
 
 
@@ -31,34 +32,50 @@ bool BPlusTreeCursor<TreeType>::next() {
     {
         return false;
     }
+    
     if(location.key_index >= location.leaf->current_key_count) 
     {
         if(location.leaf->next_leaf == 0) 
         {
+            // FIX 1: The End of the Tree
+            // Overwriting the guard with an empty default object forces 
+            // the destructor to run, safely dropping the lock ONCE.
+            location.leaf_guard = {}; 
+            location.leaf = nullptr;
+            location.key_index = -1;
+            
             return false; // end of tree
         } 
         else 
         {
-            //load next 
+            assert(txn != nullptr);
+
+            // FIX 2: RAII Lateral Crabbing
+            // Read the next location BEFORE we drop the current lock
+            off_t next_leaf_loc = location.leaf->next_leaf;
+
+            // This single line safely acquires the lock on next_leaf_loc, 
+            // and the assignment operator automatically drops the lock on the current leaf!
+            location.leaf_guard = SharedPageGuard(next_leaf_loc, *txn);
+            
+            // Now safely load the node under the protection of the new guard
             location.leaf = static_cast<typename TreeType::LeafNodeType*>(
                 tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf
+                next_leaf_loc, *txn
                 )
             );
+
             leaves_read++;
             location.key_index = 0;
         }
     }
-
 
     //update current key and value
     update_key_and_value(); 
 
     //commit_progress();
     return true;
-
 }
-
 
 template <typename TreeType>
 void BPlusTreeCursor<TreeType>::skip_read_leaves()
@@ -73,7 +90,7 @@ void BPlusTreeCursor<TreeType>::skip_read_leaves()
     {
         location.leaf = static_cast<typename TreeType::LeafNodeType*>(
             tree->file->template load_node<typename TreeType::NodeType>(
-                location.leaf->next_leaf
+                location.leaf->next_leaf, *txn
             )
         );
         location.key_index = 0;
@@ -100,16 +117,8 @@ void BPlusTreeCursor<TreeType>::commit_progress()
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_start()
 {
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
-
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
-
-
-
-    location = tree->locate_start();
-    if (location.key_index == -1 || location.leaf == nullptr || tree->root_node->current_key_count == 0)
+    location = tree->locate_start(table->columns[column_index], *txn);
+    if (location.key_index == -1 || location.leaf == nullptr)
     {
         return false;
     }
@@ -123,15 +132,16 @@ bool BPlusTreeCursor<TreeType>::set_start()
 template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_gte(const Key& key)
 {
-    //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
-
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gte(std::string(reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen));
+
+    const Column& column = table->columns[column_index];
+
+    location = tree->locate_gte(
+        std::string(
+            reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), column, *txn
+        );
+
     if (location.key_index == -1)
     {
         return false;
@@ -144,14 +154,16 @@ template <typename TreeType>
 bool BPlusTreeCursor<TreeType>::set_gt(const Key &key)
 {
     //std::cout << "set tree root to " << table->columns[column_index].indexLocation << "\n";
-    tree->tree_root = table->columns[column_index].indexLocation;
-    this->tree_root = tree->tree_root;
-    tree->root_node =
-        tree->file->template load_node<typename TreeType::NodeType>(tree->tree_root);
+    //tree->tree_root = table->columns[column_index].indexLocation;
+    
+    const Column& column = table->columns[column_index];
 
     Key k = key;
     normalize_key(k, TreeType::KeyLen);
-    location = tree->locate_gt(std::string(reinterpret_cast<const char*>(k.bytes.data()), k.bytes.size()));
+    location = tree->locate_gt(
+        std::string(
+            reinterpret_cast<const char*>(k.bytes.data()), TreeType::KeyLen), column, *txn
+        );
 
     if(location.key_index == -1)
     {

@@ -17,6 +17,8 @@ enum class TokenType
     KW_UPDATE,
     KW_COMMIT,
     KW_ROLLBACK,
+    //@switch session
+    KW_SWITCH,  
 
 
 
@@ -49,6 +51,11 @@ enum class TokenType
     KW_WHERE,
     ASTERISK,
     KW_FROM,
+    KW_COUNT,
+    KW_LIMIT,
+    KW_SUM,
+    KW_MAX,
+    KW_MIN,
 
 
 
@@ -75,6 +82,7 @@ enum class TokenType
     //INSERT tokens
     KW_INSERT,
     KW_INTO,
+    KW_VALUES,
 
 
     //arg tokens
@@ -117,7 +125,7 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::KW_RUN:                 return "KW_RUN";
         case TokenType::KW_UPDATE:              return "KW_UPDATE";
         case TokenType::KW_SHOW:                return "KW_SHOW";
-
+        case TokenType::KW_SWITCH:              return "KW_SWITCH";
 
         case TokenType::KW_WHERE:               return "KW_WHERE";
         case TokenType::KW_MODIFY:              return "KW_MODIFY";
@@ -165,6 +173,12 @@ inline const char* TokenTypeToString(TokenType t) {
         case TokenType::SEMICOLON:              return "SEMICOLON";
         case TokenType::COMMA:                  return "COMMA";
         case TokenType::PERIOD:                 return "PERIOD";
+        case TokenType::KW_COUNT:               return "KW_COUNT";
+        case TokenType::KW_LIMIT:               return "KW_LIMIT";
+        case TokenType::KW_SUM:                 return "KW_SUM";
+        case TokenType::KW_MAX:                 return "KW_MAX";
+        case TokenType::KW_MIN:                 return "KW_MIN";
+        case TokenType::KW_VALUES:              return "KW_VALUES";
     }
     return "UNKNOWN";
 }
@@ -177,12 +191,18 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"from",    TokenType::KW_FROM},
         {"on",      TokenType::KW_ON},
         {"select",  TokenType::KW_SELECT},
+        {"count",   TokenType::KW_COUNT},
         {"update",  TokenType::KW_UPDATE},
         {"delete",  TokenType::KW_DELETE},
         {"set",     TokenType::KW_SET},
         {"show",    TokenType::KW_SHOW},
+        {"switch",  TokenType::KW_SWITCH},
 
         {"where",   TokenType::KW_WHERE},
+        {"limit",   TokenType::KW_LIMIT},
+        {"sum",     TokenType::KW_SUM},
+        {"max",     TokenType::KW_MAX},
+        {"min",     TokenType::KW_MIN},
         {"run",      TokenType::KW_RUN},
         {"begin",    TokenType::KW_BEGIN},
         {"commit",      TokenType::KW_COMMIT},
@@ -198,6 +218,7 @@ inline TokenType StringToTokenType(const std::string& text) {
         {"info",    TokenType::KW_INFO},
         {"insert",  TokenType::KW_INSERT},
         {"into",    TokenType::KW_INTO},
+        {"values",  TokenType::KW_VALUES},
         {"load",    TokenType::KW_LOAD},
         {"and",     TokenType::AND},
         {"or",      TokenType::OR},

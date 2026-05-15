@@ -4,6 +4,7 @@
 #include "../query/validator.hpp"
 
 
+
 std::string strip_quotes(const std::string &input)
 {
 
@@ -41,6 +42,7 @@ void Record::update_column(int column_index, std::string &value, const Table& ta
             uint8_t new_len = static_cast<uint8_t>(value.size());
             // Note: offset points to the length byte, not the data
             uint8_t old_len = static_cast<uint8_t>(str[offset]);
+            (void)old_len;
 
             size_t old_total = column_lengths[column_index];
             size_t new_total = 1 + new_len;
@@ -232,7 +234,7 @@ Record::Record(const std::byte* read_from, const Table& table)
         switch (table.columns[i].type)
         {
             case Type::BOOL:
-                str += (*p++ == '1') ? "true" : "false";
+                str += *p++;  // store raw '0'/'1' byte, matching the TokenVec constructor
                 col_len = 1;
                 break;
             case Type::INTEGER:

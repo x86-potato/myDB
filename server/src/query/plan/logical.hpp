@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../config.h"
-#include "../ast.hpp"
+#include "../parse/ast.hpp"
 
 #include <string>
 #include <vector>
@@ -56,21 +56,21 @@ struct Path
     std::vector<Predicate> predicates;
 };
 
-class Plan
+class LogicalPlan
 {
 public:
     using Paths = std::vector<Path>;
     Paths paths;
 
-    Plan(const AST::SelectQuery& query);
-    Plan(const std::string& tableName, const AST::Condition& query);
+    LogicalPlan(const AST::SelectQuery& query);
+    LogicalPlan(const std::string& tableName, const AST::Condition& query);
 
-    void build_paths(AST::Expr* expr, Paths& paths);
-    Predicate make_predicate(AST::Expr* expr);
+    void decompose_condition(AST::Expr* expr, Paths& paths);
+    Predicate extract_predicate(AST::Expr* expr);
 
     void debug_print_predicate(const Predicate& p);
     void debug_print_path(const Path& path, size_t index);
-    void debug_print_plan(const Plan& plan);
+    void debug_print_plan(const LogicalPlan& plan);
 
     void execute();
 };

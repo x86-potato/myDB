@@ -4,6 +4,12 @@
 
 
 
+//wal stuff
+const std::string WAL_LOG_FILE_NAME = "wal.log";
+
+
+//server stuff
+constexpr int MAX_SESSIONS = 1000;
 
 
 constexpr int CACHE_PAGE_LIMIT = 300000;

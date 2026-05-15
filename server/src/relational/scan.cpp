@@ -8,8 +8,8 @@
 
 
 
-Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
-: database_(database), table_(table), pred_(predicate) {
+Scan::Scan(Database& database,const Table &table, const Predicate *predicate, Transaction* txn)
+: database_(database), table_(table), pred_(predicate), txn(txn) {
     tables_.push_back(&table_);
 
     if (pred_ == nullptr)
@@ -35,29 +35,27 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
         std::string indexedColumnName = std::get<ColumnOperand>(pred_->left).column;
         std::string key = std::get<LiteralOperand>(pred_->right).literal;
 
-        off_t index_location = table.get_column(indexedColumnName).indexLocation;
-        
         index_key_ = make_index_key(strip_quotes(key),
                                      table.get_column(indexedColumnName).type);
         switch (table.get_column(indexedColumnName).type)
         {
             case Type::CHAR32:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database.index_tree32);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database.index_tree32, txn);
                 break;
             case Type::CHAR16:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database.index_tree16);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database.index_tree16, txn);
                 break;
             case Type::CHAR8:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database.index_tree8);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database.index_tree8, txn);
                 break;
             case Type::INTEGER:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database.index_tree4);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database.index_tree4, txn);
                 break;
             default:
                 throw std::runtime_error("Unsupported data type for indexed column");
         }
 
-        cursor_->tree_root = index_location;
+
         cursor_->table = &const_cast<Table&>(table_);
         cursor_->column_index = table_.get_column_index(indexedColumnName);
         cursor_->db = &database_;
@@ -81,26 +79,25 @@ Scan::Scan(Database& database,const Table &table, const Predicate *predicate)
     else if (mode_ == ScanMode::FULL_SCAN)
     {
         //get primary index location
-        off_t index_location = table.get_column(0).indexLocation;
         switch (table.get_column(0).type)
         {
             case Type::CHAR32:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database.index_tree32);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database.index_tree32, txn);
                 break;
             case Type::CHAR16:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database.index_tree16);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database.index_tree16, txn);
                 break;
             case Type::CHAR8:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database.index_tree8);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database.index_tree8, txn);
                 break;
             case Type::INTEGER:
-                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database.index_tree4);
+                cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database.index_tree4, txn);
                 break;
             default:
                 throw std::runtime_error("Unsupported data type for indexed column");
         }
 
-        cursor_->tree_root = index_location;
+
         cursor_->table = &const_cast<Table&>(table_);
         cursor_->column_index = 0;
         cursor_->db = &database_;
@@ -233,22 +230,22 @@ bool Scan::set_key_on_column(const Key& key, const std::string& column_name)
     // Switch to the correct index for this column
     switch (col.type) {
         case Type::CHAR32:
-            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database_.index_tree32);
+            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree32>>(&database_.index_tree32, txn);
             break;
         case Type::CHAR16:
-            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database_.index_tree16);
+            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree16>>(&database_.index_tree16, txn);
             break;
         case Type::CHAR8:
-            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database_.index_tree8);
+            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree8>>(&database_.index_tree8, txn);
             break;
         case Type::INTEGER:
-            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database_.index_tree4);
+            cursor_ = std::make_unique<BPlusTreeCursor<MyBtree4>>(&database_.index_tree4, txn);
             break;
         default:
             throw std::runtime_error("Unsupported data type for indexed column");
     }
 
-    cursor_->tree_root = col.indexLocation;
+
     cursor_->db = &database_;
     cursor_->table = &const_cast<Table&>(table_);
     started = false;
@@ -274,7 +271,7 @@ bool Scan::next_from_posting_list(Output& output)
             off_t loc = current_posting_block_->entries[current_slot++];
             if (loc >= 4096) {        // valid record_location
                 output.tuples_.push_back({
-                    .record = database_.file->get_record(loc, table_),
+                    .record = database_.file->get_record(loc, table_, txn),
                     .location = loc,
                     .table_ = &table_
                 });
@@ -303,10 +300,9 @@ bool Scan::next(Output& output)
         started = true;
         
         if (mode_ == ScanMode::FULL_SCAN) {
-            // FIX: Check if set_start failed (empty table)
             if (!cursor_->set_start()) {
                 return false; 
-        }
+            }
         } else {
             bool found = false;
             switch (pred_->op) {
@@ -324,15 +320,10 @@ bool Scan::next(Output& output)
                 default:
                     throw std::runtime_error("Unsupported operation");
             }
-            // FIX: Check if the initial seek failed
             if (!found) {
                 return false;
             }
         }
-    }
-    else if (posting_block_index_ != -1)
-    {
-        //continue iterating posting list
     }
     else if (!skipped_ && mode_ != ScanMode::SECONDARY_INDEX_SCAN && !is_inner_)
     {
@@ -354,7 +345,7 @@ bool Scan::next(Output& output)
         if(cursor_->get_key().bytes == index_key_.bytes)
         {
             output.tuples_.push_back({
-                .record = database_.file->get_record(cursor_->get_value(), table_),
+                .record = database_.file->get_record(cursor_->get_value(), table_, txn),
                 .location = cursor_->get_value(),
                 .table_ = &table_
             });
@@ -381,7 +372,7 @@ bool Scan::next(Output& output)
 
         // 5. Normal single record
         output.tuples_.push_back({
-            .record = database_.file->get_record(value, table_),
+            .record = database_.file->get_record(value, table_, txn),
             .location = value,
             .table_ = &table_
         });
@@ -427,10 +418,12 @@ bool Scan::next(Output& output)
     {
         //full scan mode
         output.tuples_.push_back({
-            .record = database_.file->get_record(cursor_->get_value(), table_),
+            .record = database_.file->get_record(cursor_->get_value(), table_, txn),
             .location = cursor_->get_value(),
             .table_ = &table_
         });
         return true;
     }
+
+    return false;
 }

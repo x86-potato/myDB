@@ -40,7 +40,7 @@ void Parser::parserError(const char* message)
     Token* curr = iterator.getCurr();
     const std::string name = curr ? curr->name : "<no-token>";
     std::cout << "PARSER ERROR: UNEXPECTED TOKEN "
-              << name << " " << message << std::endl;
+              << name << " " << message << "\n";
 }
 
 int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
@@ -53,14 +53,6 @@ int Parser::parseCreateArg(AST::CreateTableQuery *queryAST)
         return 1;
     }
     tempArg.column = iterator.getCurr()->name;
-
-
-    if(iterator.getNext()->type != TokenType::EQUAL)
-    {
-        parserError("Expected a equal sign");
-        return 1;
-    }
-
 
     switch(iterator.getNext()->type)
     {
@@ -347,6 +339,12 @@ ParserReturn Parser::parseInsert()
         return {1, nullptr};
     }
     query.get()->tableName = iterator.getCurr()->name;
+    //expect VALUES keyword
+    if(iterator.getNext()->type != TokenType::KW_VALUES)
+    {
+        parserError("Expected VALUES keyword");
+        return {1, nullptr};
+    }
     //expect opening parens
     if(iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
     {
@@ -463,6 +461,10 @@ std::unique_ptr<AST::Expr> Parser::parse_primary(const std::string &table_name)
             return std::make_unique<AST::Expr>
             (AST::Expr{AST::Literal{tok->name}});
 
+        case TokenType::BOOL_LITERAL:
+            return std::make_unique<AST::Expr>
+            (AST::Expr{AST::Literal{tok->name}});
+
         case TokenType::OPENING_PARENTHESIS: {
             auto expr = parse_expr(0,table_name);            // parse inside parentheses
             Token* close = iterator.getNext();    // consume th/e ')'
@@ -481,12 +483,142 @@ ParserReturn Parser::parseSelect()
     auto query = std::make_unique<AST::SelectQuery>();
     query->type = AST::QueryType::Select;
 
-    //for now only handle full projection
+    Token* first = iterator.getNext();
 
-    //expect asterisk
-    if(iterator.getNext()->type != TokenType::ASTERISK)
+    auto is_agg_token = [](TokenType t) {
+        return t == TokenType::KW_COUNT || t == TokenType::KW_SUM ||
+               t == TokenType::KW_MAX   || t == TokenType::KW_MIN;
+    };
+
+    auto parse_one_agg = [&](Token* tok) -> int {
+        AST::AggregateItem item;
+        if (tok->type == TokenType::KW_COUNT)
+        {
+            if (iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
+            {
+                parserError("Expected ( after COUNT");
+                return 1;
+            }
+            if (iterator.getNext()->type != TokenType::ASTERISK)
+            {
+                parserError("Expected * inside COUNT()");
+                return 1;
+            }
+            if (iterator.getNext()->type != TokenType::CLOSING_PARENTHESIS)
+            {
+                parserError("Expected ) after COUNT(*");
+                return 1;
+            }
+            item.type = AST::AggregateType::COUNT;
+        }
+        else
+        {
+            if      (tok->type == TokenType::KW_SUM) item.type = AST::AggregateType::SUM;
+            else if (tok->type == TokenType::KW_MAX) item.type = AST::AggregateType::MAX;
+            else                                     item.type = AST::AggregateType::MIN;
+
+            if (iterator.getNext()->type != TokenType::OPENING_PARENTHESIS)
+            {
+                parserError("Expected ( after aggregate function");
+                return 1;
+            }
+            Token* col_tok = iterator.getNext();
+            if (!col_tok || col_tok->type != TokenType::IDENTIFIER)
+            {
+                parserError("Expected column name inside aggregate");
+                return 1;
+            }
+            AST::SelectColumn sc;
+            if (iterator.peeknext() && iterator.peeknext()->type == TokenType::PERIOD)
+            {
+                sc.table = col_tok->name;
+                iterator.getNext(); // consume '.'
+                Token* col = iterator.getNext();
+                if (!col || col->type != TokenType::IDENTIFIER)
+                {
+                    parserError("Expected column name after '.'");
+                    return 1;
+                }
+                sc.column = col->name;
+            }
+            else
+            {
+                sc.column = col_tok->name;
+            }
+            if (iterator.getNext()->type != TokenType::CLOSING_PARENTHESIS)
+            {
+                parserError("Expected ) after aggregate column");
+                return 1;
+            }
+            item.column = sc;
+        }
+        query->aggregates.push_back(item);
+        return 0;
+    };
+
+    if (is_agg_token(first->type))
     {
-        parserError("Expected a asterisk");
+        if (parse_one_agg(first) != 0) return {1, nullptr};
+
+        while (iterator.peeknext() && iterator.peeknext()->type == TokenType::COMMA)
+        {
+            iterator.getNext(); // consume ','
+            Token* next_tok = iterator.getNext();
+            if (!next_tok || !is_agg_token(next_tok->type))
+            {
+                parserError("Expected aggregate function after ','");
+                return {1, nullptr};
+            }
+            if (parse_one_agg(next_tok) != 0) return {1, nullptr};
+        }
+    }
+    else if (first->type == TokenType::ASTERISK)
+    {
+        query->select_all = true;
+    }
+    else if (first->type == TokenType::IDENTIFIER)
+    {
+        // parse column list: col  or  table.col, comma-separated
+        auto parse_one = [&](Token* tok) -> int {
+            AST::SelectColumn sc;
+            if (iterator.peeknext() && iterator.peeknext()->type == TokenType::PERIOD)
+            {
+                sc.table = tok->name;
+                iterator.getNext(); // consume '.'
+                Token* col = iterator.getNext();
+                if (!col || col->type != TokenType::IDENTIFIER)
+                {
+                    parserError("Expected column name after '.'");
+                    return 1;
+                }
+                sc.column = col->name;
+            }
+            else
+            {
+                sc.column = tok->name;
+                // sc.table left empty; resolved to first table at execution
+            }
+            query->selected_columns.push_back(sc);
+            return 0;
+        };
+
+        if (parse_one(first) != 0) return {1, nullptr};
+
+        while (iterator.peeknext() && iterator.peeknext()->type == TokenType::COMMA)
+        {
+            iterator.getNext(); // consume ','
+            Token* col = iterator.getNext();
+            if (!col || col->type != TokenType::IDENTIFIER)
+            {
+                parserError("Expected column name after ','");
+                return {1, nullptr};
+            }
+            if (parse_one(col) != 0) return {1, nullptr};
+        }
+    }
+    else
+    {
+        parserError("Expected *, COUNT(*), SUM(col), MAX(col), MIN(col), or column list after SELECT");
         return {1, nullptr};
     }
 
@@ -507,7 +639,7 @@ ParserReturn Parser::parseSelect()
     }
     query->tableNames.push_back(tableToken->name);
 
-    while (iterator.peeknext()->type == TokenType::COMMA) {
+    while (iterator.peeknext() && iterator.peeknext()->type == TokenType::COMMA) {
         iterator.getNext(); // consume the comma
         Token* tableToken = iterator.getNext();
         if (tableToken->type != TokenType::IDENTIFIER) {
@@ -522,17 +654,27 @@ ParserReturn Parser::parseSelect()
 
 
 
-    // expect where or semicolon
-
+    // expect where, limit, or semicolon
     switch (iterator.getNext()->type) {
         case TokenType::SEMICOLON:
             query->has_where = false;
             return {0, std::move(query)};
+        case TokenType::KW_LIMIT: {
+            Token* limit_tok = iterator.getNext();
+            if (!limit_tok || limit_tok->type != TokenType::LITERAL)
+            {
+                parserError("Expected integer after LIMIT");
+                return {1, nullptr};
+            }
+            query->limit = std::stoi(limit_tok->name);
+            query->has_where = false;
+            return {0, std::move(query)};
+        }
         case TokenType::KW_WHERE:
             query->has_where = true;
             break;
         default:
-            parserError("Expected WHERE keyword or semicolon");
+            parserError("Expected WHERE, LIMIT, or semicolon");
             return {1, nullptr};
     }
 
@@ -544,6 +686,19 @@ ParserReturn Parser::parseSelect()
 
 
     query->condition = std::move(*condition);
+
+    // optional LIMIT after WHERE condition
+    if (iterator.peeknext() && iterator.peeknext()->type == TokenType::KW_LIMIT)
+    {
+        iterator.getNext(); // consume KW_LIMIT
+        Token* limit_tok = iterator.getNext();
+        if (!limit_tok || limit_tok->type != TokenType::LITERAL)
+        {
+            parserError("Expected integer after LIMIT");
+            return {1, nullptr};
+        }
+        query->limit = std::stoi(limit_tok->name);
+    }
 
     return {0, std::move(query)};
 }
@@ -646,6 +801,51 @@ ParserReturn Parser::parseDelete()
     return {0, std::move(query)};
 }
 
+ParserReturn Parser::parseBegin()
+{
+    auto query = std::make_unique<AST::BeginQuery>();
+    query->type = AST::QueryType::Begin;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseCommit()
+{
+    auto query = std::make_unique<AST::CommitQuery>();
+    query->type = AST::QueryType::Commit;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
+ParserReturn Parser::parseRollback()
+{
+    auto query = std::make_unique<AST::RollbackQuery>();
+    query->type = AST::QueryType::Rollback;
+
+    //expect semicolon
+    if(iterator.getNext()->type != TokenType::SEMICOLON)
+    {
+        parserError("Expected a semicolon");
+        return {1, nullptr};
+    }
+
+    return {0, std::move(query)};
+}
+
 ParserReturn Parser::parse(std::vector<Token> &tokenList)
 {
     iterator.tokenList = &tokenList;
@@ -669,6 +869,12 @@ ParserReturn Parser::parse(std::vector<Token> &tokenList)
             return parseRun();
         case TokenType::KW_SHOW:
             return parseShow();
+        case TokenType::KW_BEGIN:
+            return parseBegin();
+        case TokenType::KW_COMMIT:
+            return parseCommit();
+        case TokenType::KW_ROLLBACK:
+            return parseRollback();
         default:
             parserError("No such query exists");
             break;

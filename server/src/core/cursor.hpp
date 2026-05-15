@@ -2,18 +2,23 @@
 #include "../config.h"
 #include "../relational/key.hpp"
 #include "btree.hpp"
-#include "../core/database.hpp"
 #include <optional>
 #include <algorithm>
+
+class Database;
+class Transaction;
 
 
 
 class TreeCursor {
 public:
-    off_t tree_root = 0;
     Database* db = nullptr;
     int column_index = 0; //to do, only works for primairy column
+    
     Table* table = nullptr;
+    Transaction* txn = nullptr;
+
+    
 
     virtual bool next() = 0;
     virtual ~TreeCursor() = default;
@@ -46,7 +51,7 @@ public:
 
 
     BPlusTreeCursor() = default;
-    BPlusTreeCursor(TreeType* tree);
+    BPlusTreeCursor(TreeType* tree, Transaction* txn);
 
     off_t get_value() const override;
     const Key& get_key() const override;

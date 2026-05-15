@@ -8,7 +8,7 @@
 #include "../core/table.hpp"
 #include "../core/database.hpp"
 #include "../config.h"
-#include "../query/plan/planner.hpp"
+#include "../query/plan/logical.hpp"
 //parent class of al relational operations
 
 class Database;
@@ -80,7 +80,7 @@ enum class ScanMode {
 
 class Scan : public Operator {
 public:
-    Scan(Database& database, const Table& table, const Predicate* pred = nullptr);
+    Scan(Database& database, const Table& table, const Predicate* pred = nullptr, Transaction* txn = nullptr);
 
     bool next(Output &output) override;
     bool next_from_posting_list(Output& output);
@@ -95,8 +95,9 @@ public:
 private:
     Database& database_;
     const Table& table_;
-
     const Predicate* pred_;
+    Transaction* txn;
+
     Key index_key_;
     bool skipped_ = false;
     bool started = false;

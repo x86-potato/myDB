@@ -1,22 +1,90 @@
+#pragma once
 #include "../config.h"
-#include "../query/plan/planner.hpp"
+#include "../query/plan/logical.hpp"
+#include "../core/cache.hpp"
+#include <unordered_set>
+#include "manager.hpp"
 
-
-class Mutation
-{
-
-};
+class WAL;
 
 class Transaction {
 private:
-    std::vector<Mutation> Mutations;
-public:
-    void add_insert();
-    void add_modify();
-    void add_delete();
+    std::unordered_map<off_t, Page> pages;
 
+public:
+    LockManager &lock_manager;
+    Cache& cache;
+    size_t txn_id;
+    WAL &wal;
+
+
+
+    std::unordered_set<off_t> locks_held; // List of page locations for which this transaction holds locks
+
+    std::unordered_set<off_t> shared_locks_held;
+
+    std::unordered_set<off_t> temp_locks;
+
+    //@On commit, these blocks are allocated and used by the transaction
+    //@On roll back, these blocks are freed and used in the linked list of free blocks.
+    std::vector<off_t> allocated_blocks;
+
+    //@On commit, these blocks are freed
+    //@On roll back, nothing happnes to them.
+    std::vector<off_t> freed_blocks;
+
+    Transaction(int txn_id, Cache& cache, LockManager &lock_manager, WAL &wal) : lock_manager(lock_manager), cache(cache), txn_id(txn_id), wal(wal) {};
+
+    // RAII: if the transaction was never committed (session crash, exception),
+    // the destructor rolls back automatically, releasing all held locks.
+    ~Transaction() { rollback(); }
 
     void begin();
-    void commit();
+
+    int commit();
+
     void rollback();
+
+
+    //@ must be called on any mutable pages
+    int copy_page(off_t page_location);
+
+    //@ check is exlusive locked
+    bool is_page_owned(off_t page_location);
+
+    int copy_page_no_lock(off_t page_location);
+
+    bool acquire_ownership_and_copy_if_needed(off_t page_location);
+
+    void try_release_ownership(off_t page_location);
+
+    void try_acquire_shared(off_t page_location);
+
+    void try_release_shared(off_t page_location);
+
+    void print_txn_stat();
+
+    //@ mutable
+    Page* private_cache_read(off_t page_location);
+
+    //@Returns a pointer to the page in LRU cache
+    Page* read_page(off_t page_location);
+
+    //private cache only write
+    void write_to_page(Page* page, size_t offset, const void* src, size_t len, off_t block_offset);
+
+    void acquire_shared(off_t page_location);
+
+    void release_shared(off_t page_location);
+
+
+    //btree stuff
+    void try_temp_lock(off_t page_location);
+
+    void try_release_temp_lock(off_t page_location);
+
+    void promote_temp_locks_to_permanent();
+
+    void release_temp_locks();
+
 };
